@@ -1,0 +1,93 @@
+specVersion: v2
+
+meta:
+  name: speedtest-validator
+  image: project-speedtest-validator
+  description: "DAS Speed Test Validator — Processes Samsung Service Mode and Speedtest screenshots using Ollama VLM (qwen3-vl:8b) and analysis LLM (gpt-oss:20b) to validate T-Mobile DAS site RF performance against MOP thresholds."
+  labels:
+    - genai
+    - ollama
+    - telecom
+    - das
+    - rf-validation
+  createdOn: "2026-03-19"
+  defaultBranch: main
+
+environment:
+  base:
+    registry: nvcr.io
+    image: nvidia/pytorch:24.01-py3
+    build_timestamp: "20240201000000"
+    name: PyTorch on Python 3 (NVIDIA GPU)
+    supported_architectures:
+      - amd64
+  gpu:
+    count: 1
+  secrets: []
+  variables:
+    - name: OLLAMA_HOST
+      description: "Ollama API endpoint"
+      default: "http://localhost:11434"
+    - name: VRAM_LIMIT_GB
+      description: "GPU VRAM limit in GB (16 for RTX 3070 Ti)"
+      default: "16"
+
+execution:
+  apps:
+    - name: Visual Studio Code
+      type: vs-code
+      class: native
+    - name: JupyterLab
+      type: jupyterlab
+      class: webapp
+      health_check_command: '[ \$(echo url=http://localhost:8888/api/status | curl -o /dev/null -s -w ''%{http_code}'' --config -) == ''200'' ]'
+      start_command: jupyter lab --allow-root --port 8888 --ip 0.0.0.0 --no-browser --ServerApp.token='' --ServerApp.allow_origin='*'
+      stop_command: jupyter lab stop 8888
+      user_msg: ""
+  resources:
+    gpu:
+      requested: 1
+    sharedMemoryMB: 1024
+
+layout:
+  - path: code/
+    type: code
+    storage: git
+  - path: code/knowledge/
+    type: code
+    storage: git
+  - path: code/prompts/
+    type: code
+    storage: git
+  - path: code/utils/
+    type: code
+    storage: git
+  - path: tests/
+    type: code
+    storage: git
+  - path: docs/
+    type: code
+    storage: git
+  - path: models/
+    type: model
+    storage: gitlfs
+  - path: data/
+    type: data
+    storage: gitlfs
+  - path: data/sample/
+    type: data
+    storage: gitlfs
+  - path: data/scratch/
+    type: data
+    storage: gitignore
+  - path: input/
+    type: data
+    storage: gitlfs
+  - path: outputs/
+    type: data
+    storage: gitignore
+  - path: .project/
+    type: code
+    storage: git
+
+mounts: []

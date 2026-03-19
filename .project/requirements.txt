@@ -1,0 +1,18 @@
+# Python dependencies for NVIDIA AI Workbench container build
+# These are installed during container build via pip
+
+PyYAML>=6.0
+openpyxl>=3.1.0
+python-docx>=1.1.0
+Pillow>=10.0
+requests>=2.31.0
+pydantic>=2.0
+python-dateutil>=2.8
+jsonschema>=4.20
+
+# Testing
+pytest>=7.4
+
+# GPU acceleration (NVIDIA RAPIDS — optional, install via conda)
+# conda install -c rapidsai -c conda-forge cudf cuml cupy cuda-version=12.2
+# App auto-detects RAPIDS and falls back to pandas/sklearn if not installed.

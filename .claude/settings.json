@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "bash:python *",
+      "bash:pip install *",
+      "bash:pytest *",
+      "bash:ls *",
+      "bash:cat *",
+      "bash:cp *",
+      "bash:git *"
+    ],
+    "deny": [
+      "bash:rm -rf *",
+      "bash:sudo *",
+      "bash:curl *",
+      "bash:wget *"
+    ]
+  }
+}

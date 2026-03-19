@@ -1,0 +1,27 @@
+# Git LFS tracking for large binary files
+# NVIDIA AI Workbench uses LFS for models/ and data/ directories
+
+# Models
+models/**/*.bin filter=lfs diff=lfs merge=lfs -text
+models/**/*.gguf filter=lfs diff=lfs merge=lfs -text
+models/**/*.safetensors filter=lfs diff=lfs merge=lfs -text
+models/**/*.pt filter=lfs diff=lfs merge=lfs -text
+models/**/*.pth filter=lfs diff=lfs merge=lfs -text
+
+# Input data (reference files — Excel, PDF, Word)
+input/*.xlsx filter=lfs diff=lfs merge=lfs -text
+input/*.pdf filter=lfs diff=lfs merge=lfs -text
+input/*.docx filter=lfs diff=lfs merge=lfs -text
+
+# Sample data
+data/sample/*.xlsx filter=lfs diff=lfs merge=lfs -text
+data/sample/*.docx filter=lfs diff=lfs merge=lfs -text
+
+# Screenshots (when site folders are added)
+data/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+data/**/*.png filter=lfs diff=lfs merge=lfs -text
+
+# Generated outputs (if committed)
+outputs/*.xlsx filter=lfs diff=lfs merge=lfs -text
+outputs/*.docx filter=lfs diff=lfs merge=lfs -text
+outputs/*.pdf filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,16 @@
+[project]
+name = "speedtest-validator"
+version = "0.1.0"
+description = "DAS Speed Test Validator — Automated RF validation of T-Mobile DAS sites using Ollama vision-language models"
+requires-python = ">=3.10"
+authors = [
+    {name = "Sasanka Valluri", email = "sasanka.valluri@gmail.com"},
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"

@@ -1,0 +1,69 @@
+# DAS Speed Test Validator — Configuration
+# All paths, model names, and thresholds live here. Never hardcode.
+
+ollama:
+  base_url: "http://localhost:11434"
+  vision_model: "qwen3-vl:8b"        # ~5GB VRAM — screenshot OCR/extraction
+  analysis_model: "gpt-oss:20b"       # ~12GB VRAM — observations, recommendations, KPI impact
+  vram_gb: 16                          # Total GPU VRAM — cannot run both models simultaneously
+  unload_before_switch: true           # MUST unload one model before loading the other
+  max_retries: 3                       # JSON schema validation retries
+  extraction_temperature: 0.15         # Low temp for deterministic extraction
+  analysis_temperature: 0.3            # Slightly higher for narrative generation
+
+paths:
+  # Reference documents (in input/ directory)
+  ciq_excel: "./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx"
+  threshold_excel: "./input/DAS_Validation_Thresholds.xlsx"
+  rag_docx: "./input/RF_Throughput_Analysis_Universal_RAG.docx"
+  kpi_excel: "./input/MS2_KPI_and_Counters.xlsx"
+  mop_pdf: "./input/DAS_Validation_MOP_2.pdf"
+  # I/O directories
+  output_dir: "./outputs"
+  sample_dir: "./data/sample"
+
+# Service Mode pass/fail thresholds (simple — same for all techs)
+# These are for Antenna End (under DAS antennas) testing
+service_mode_thresholds:
+  rsrp_min: -75       # dBm
+  rsrp_max: -50       # dBm
+  sinr_min: 25        # dB
+  rsrq_min: -12       # dB
+  rsrq_max: -3        # dB
+  tx_power: "negative" # Must always be negative
+
+# Speed test thresholds are NOT here — they are loaded from
+# DAS_Validation_Thresholds.xlsx at runtime via threshold_engine.py
+# Lookup dimensions: SISO/MIMO × BW LTE × BW NR C1 × BW NR C2 × Connection Mode
+
+# Screenshot pairing
+screenshot:
+  max_pair_interval_seconds: 240   # 4 minutes max between SM and ST timestamps
+  supported_extensions: [".jpg", ".jpeg", ".png"]
+  service_mode_marker: "Service mode RIL"
+  speedtest_marker: "Speedtest"
+
+# Output formatting
+output:
+  site_name: "SFY0803A"             # Override per run via CLI --site-name
+  xlsx_columns:
+    - "BTS"
+    - "Tech/Sector"
+    - "Connection Mode"
+    - "Bandwidth"
+    - "PCI"
+    - "RSRP"
+    - "RSRQ"
+    - "SINR"
+    - "UE TX Power"
+    - "SM-ST Duration"
+    - "DL Throughput"
+    - "UL Throughput"
+    - "Comment"
+    - "Observations"
+    - "Recommendations"
+    - "Impact on KPIs"
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
