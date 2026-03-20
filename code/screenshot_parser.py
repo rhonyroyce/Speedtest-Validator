@@ -7,6 +7,7 @@ Implementation: Claude Code Prompt 3 (Screenshot Parser)
 """
 import base64
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,28 +31,38 @@ def _strip_units(value: Any) -> Any:
     """
     if not isinstance(value, str):
         return value
-    import re
-    cleaned = re.sub(
-        r'\s*(MHz|dBm|dB|kHz|Mbps|bps|ms|pct|%|ratio)\s*$',
-        '', value.strip(), flags=re.IGNORECASE,
-    )
+    cleaned = _UNIT_PATTERN.sub('', value.strip())
     if not cleaned:
         return value
     return cleaned
 
 
+# Common RF unit suffixes to strip (case-insensitive)
+_UNIT_PATTERN = re.compile(
+    r'\s*(MHz|dBm|dB|kHz|Mbps|bps|ms|pct|%|ratio)\s*$',
+    re.IGNORECASE,
+)
+
+
 def _sanitize_numeric_fields(data: dict) -> dict:
-    """Convert VLM placeholder strings ('--', 'N/A', '') to None for numeric fields,
-    and strip unit suffixes so Pydantic can parse as number."""
+    """Convert VLM placeholder strings and unit-suffixed values for numeric fields."""
     if not isinstance(data, dict):
         return data
-    placeholders = {"--", "---", "N/A", "n/a", "NA", "null", "None", ""}
+    placeholders = {
+        "--", "---", "N/A", "n/a", "NA", "null", "None", "",
+        "Not Configured", "not configured", "Not Available", "not available",
+        "Not Supported", "not supported", "Disabled", "disabled",
+        "OFF", "off", "No Data", "no data",
+    }
     sanitized = {}
     for k, v in data.items():
-        if isinstance(v, str) and v.strip() in placeholders:
-            sanitized[k] = None
-        elif isinstance(v, str):
-            sanitized[k] = _strip_units(v)
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped in placeholders:
+                sanitized[k] = None
+            else:
+                cleaned = _UNIT_PATTERN.sub('', stripped)
+                sanitized[k] = cleaned if cleaned != stripped else v
         else:
             sanitized[k] = v
     return sanitized

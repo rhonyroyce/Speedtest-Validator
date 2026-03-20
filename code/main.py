@@ -125,7 +125,7 @@ class DASValidator:
         self.ciq_reader.load(ciq_path)
 
         for result in extraction_results:
-            sm = result.get("service_mode", {})
+            sm = result.get("service_mode") or {}
             lte = sm.get("lte_params") or {}
             nr = sm.get("nr_params") or {}
 
@@ -156,8 +156,8 @@ class DASValidator:
         self.threshold_engine.load_thresholds()
 
         for result in extraction_results:
-            sm = result.get("service_mode", {})
-            st = result.get("speedtest", {})
+            sm = result.get("service_mode") or {}
+            st = result.get("speedtest") or {}
             lte = sm.get("lte_params") or {}
             nr = sm.get("nr_params") or {}
 
@@ -228,9 +228,9 @@ class DASValidator:
             logger.info("Analyzing cell %d/%d: %s", i + 1, len(extraction_results), cell_id)
 
             cell_data = {
-                "service_mode": result.get("service_mode", {}),
-                "speedtest": result.get("speedtest", {}),
-                "connection_mode": _CONN_MODE_MAP.get(result.get("service_mode", {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
+                "service_mode": result.get("service_mode") or {},
+                "speedtest": result.get("speedtest") or {},
+                "connection_mode": _CONN_MODE_MAP.get((result.get("service_mode") or {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
                 "bandwidth_mhz": result.get("bandwidth_mhz", 0),
                 "mimo_config": result.get("mimo_config", "SISO"),
                 "sector": result.get("sector"),
@@ -261,8 +261,8 @@ class DASValidator:
         # Build output rows
         output_results = []
         for result in extraction_results:
-            sm = result.get("service_mode", {})
-            st = result.get("speedtest", {})
+            sm = result.get("service_mode") or {}
+            st = result.get("speedtest") or {}
             lte = sm.get("lte_params") or {}
             nr = sm.get("nr_params") or {}
 
