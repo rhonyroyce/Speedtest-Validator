@@ -1,6 +1,6 @@
 """Ollama API client — vision + text model support with VRAM-aware model switching.
 
-CRITICAL: 16GB VRAM constraint. Cannot run qwen3-vl:8b and gpt-oss:20b simultaneously.
+CRITICAL: 16GB VRAM constraint. Cannot run qwen2.5-vl:7b and gpt-oss:20b simultaneously.
 Must unload one model before loading the other via keep_alive: 0.
 
 Implementation: Claude Code Prompt 2 (Ollama Client)
@@ -17,17 +17,18 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
-    """Unified Ollama API client for vision (qwen3-vl:8b) and text (gpt-oss:20b) models."""
+    """Unified Ollama API client for vision (qwen2.5-vl:7b) and text (gpt-oss:20b) models."""
 
     def __init__(self, config: dict):
         ollama_cfg = config.get("ollama", {})
         self.base_url = ollama_cfg.get("base_url", "http://localhost:11434").rstrip("/")
-        self.vision_model = ollama_cfg.get("vision_model", "qwen3-vl:8b")
+        self.vision_model = ollama_cfg.get("vision_model", "qwen2.5-vl:7b")
         self.analysis_model = ollama_cfg.get("analysis_model", "gpt-oss:20b")
         self.max_retries = ollama_cfg.get("max_retries", 3)
         self.extraction_temperature = ollama_cfg.get("extraction_temperature", 0.15)
         self.analysis_temperature = ollama_cfg.get("analysis_temperature", 0.3)
         self.timeout = ollama_cfg.get("timeout", 300)
+        self.vision_timeout = ollama_cfg.get("vision_timeout", 600)
 
     # ------------------------------------------------------------------
     # Low-level HTTP
@@ -132,7 +133,8 @@ class OllamaClient:
     # Chat endpoints
     # ------------------------------------------------------------------
 
-    def _chat(self, model: str, messages: list[dict], temperature: float) -> str:
+    def _chat(self, model: str, messages: list[dict], temperature: float,
+              timeout: int | None = None) -> str:
         """Send a chat request and return the assistant's response text."""
         body = {
             "model": model,
@@ -140,7 +142,7 @@ class OllamaClient:
             "stream": False,
             "options": {"temperature": temperature},
         }
-        resp = self._request_with_retry("POST", "/api/chat", body, timeout=self.timeout)
+        resp = self._request_with_retry("POST", "/api/chat", body, timeout=timeout or self.timeout)
         return resp.get("message", {}).get("content", "")
 
     def chat_with_vision(self, image_base64: str, prompt: str,
@@ -161,7 +163,7 @@ class OllamaClient:
             "content": prompt,
             "images": [image_base64],
         }]
-        return self._chat(model, messages, temp)
+        return self._chat(model, messages, temp, timeout=self.vision_timeout)
 
     def chat_text(self, prompt: str, model: str | None = None,
                   temperature: float | None = None) -> str:
@@ -203,6 +205,8 @@ class OllamaClient:
                 current_prompt = prompt + "\n\nOutput ONLY valid JSON. No markdown, no explanation."
 
             raw = self.chat_with_vision(image_base64, current_prompt, model, temp)
+            logger.debug("VLM raw response length: %d chars", len(raw) if raw else 0)
+            logger.debug("VLM raw response (first 500 chars): %s", raw[:500] if raw else "EMPTY")
             parsed = self.extract_json(raw)
             if parsed is not None:
                 return parsed, attempt

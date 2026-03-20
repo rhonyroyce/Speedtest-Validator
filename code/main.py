@@ -152,6 +152,7 @@ class DASValidator:
 
         # ── Phase 4: Threshold Check ────────────────────────────────
         logger.info("Phase 4: Threshold Check")
+        self.knowledge_engine.load_all()
         self.threshold_engine.load_thresholds()
 
         for result in extraction_results:

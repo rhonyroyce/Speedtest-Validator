@@ -42,3 +42,5 @@ Return ONLY valid JSON matching this exact structure:
 - Ping/Jitter/Packet Loss are shown in smaller text below the main numbers
 - If "Detailed Result" or "Test Again" buttons are visible, results are final
 - Do NOT confuse DL and UL — DL is always listed first (left)
+
+CRITICAL: Your entire response must be ONLY the JSON object. No explanation, no markdown code fences, no text before or after. Start with { and end with }.

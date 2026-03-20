@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .ollama_client import OllamaClient
 from .utils.file_utils import discover_screenshots, pair_screenshots
@@ -21,6 +21,20 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Pydantic schemas for VLM JSON validation
 # ---------------------------------------------------------------------------
+
+def _sanitize_numeric_fields(data: dict) -> dict:
+    """Convert VLM placeholder strings ('--', 'N/A', '') to None for numeric fields."""
+    if not isinstance(data, dict):
+        return data
+    placeholders = {"--", "---", "N/A", "n/a", "NA", "null", "None", ""}
+    sanitized = {}
+    for k, v in data.items():
+        if isinstance(v, str) and v.strip() in placeholders:
+            sanitized[k] = None
+        else:
+            sanitized[k] = v
+    return sanitized
+
 
 class LTEParams(BaseModel):
     band: int | None = None
@@ -36,6 +50,26 @@ class LTEParams(BaseModel):
     dcnr_restriction: str | None = None
     ca_status: str | None = None
     ul_ca_status: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_placeholders(cls, data: Any) -> Any:
+        return _sanitize_numeric_fields(data) if isinstance(data, dict) else data
+
+    @field_validator("band", mode="before")
+    @classmethod
+    def coerce_band(cls, v: Any) -> int | None:
+        """Handle VLM returning PLMN ID (e.g. '310-260') instead of band number."""
+        if v is None:
+            return None
+        s = str(v).strip()
+        if "-" in s and not s.startswith("-"):
+            # PLMN ID like "310-260" — not a band number
+            return None
+        try:
+            return int(float(s))
+        except (ValueError, TypeError):
+            return None
 
     @field_validator("mimo_configured", mode="before")
     @classmethod
@@ -64,6 +98,11 @@ class NRParams(BaseModel):
     nr_rx1_rsrp: float | None = None
     nr_rx2_rsrp: float | None = None
     nr_rx3_rsrp: float | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_placeholders(cls, data: Any) -> Any:
+        return _sanitize_numeric_fields(data) if isinstance(data, dict) else data
 
 
 class ServiceModeData(BaseModel):

@@ -204,17 +204,50 @@ class OutputDocxGenerator:
             f"out of {total} cells tested."
         )
 
-    def _add_site_config_table(self, doc: Document, ciq_data: list[dict]) -> None:
-        """Add site configuration table from CIQ data."""
+    def _add_site_config_table(self, doc: Document, site_config: dict | list) -> None:
+        """Add site configuration table from CIQ data.
+
+        Args:
+            site_config: Either a list of cell dicts, or a dict keyed by sector
+                         number from CIQReader.get_site_config_summary().
+        """
         doc.add_heading("Site Configuration", level=1)
         doc.add_paragraph(
             "The following table summarizes the cell configuration parameters "
             "extracted from the CIQ engineering spreadsheet."
         )
 
-        if not ciq_data:
+        if not site_config:
             doc.add_paragraph("No CIQ configuration data available.")
             return
+
+        # Flatten sector-grouped dict into a flat list of cell rows
+        if isinstance(site_config, dict):
+            flat_rows = []
+            for sector, tech_groups in sorted(site_config.items()):
+                for cell in tech_groups.get("lte", []):
+                    flat_rows.append({
+                        "sector": sector,
+                        "technology": "LTE",
+                        "band": cell.get("band", cell.get("dlChannelBandwidth", "")),
+                        "bandwidth": cell.get("bandwidth_mhz", cell.get("dlChannelBandwidth", "")),
+                        "mimo_config": "MIMO" if int(cell.get("noOfTxAntennas", 1)) >= 2 else "SISO",
+                        "pci": cell.get("pci", cell.get("physicalLayerCellId", "")),
+                        "earfcn": cell.get("earfcnDl", cell.get("earfcn", "")),
+                    })
+                for cell in tech_groups.get("nr", []):
+                    flat_rows.append({
+                        "sector": sector,
+                        "technology": "NR",
+                        "band": cell.get("band", cell.get("radioType", "")),
+                        "bandwidth": cell.get("bandwidth_mhz", cell.get("channelBandwidth", "")),
+                        "mimo_config": "MIMO" if int(cell.get("noOfTxAntennas", 1)) >= 2 else "SISO",
+                        "pci": cell.get("pci", cell.get("nRPCI", "")),
+                        "arfcn": cell.get("arfcnDl", cell.get("arfcn", "")),
+                    })
+            ciq_data = flat_rows
+        else:
+            ciq_data = site_config
 
         headers = ["Sector", "Technology", "Band", "Bandwidth", "MIMO Config", "PCI", "EARFCN/ARFCN"]
         table = doc.add_table(rows=1 + len(ciq_data), cols=len(headers))
@@ -368,7 +401,7 @@ class OutputDocxGenerator:
             self._style_header_cell(cell)
 
         for row_idx, ((conn_mode, bw), stats) in enumerate(sorted(band_configs.items()), start=1):
-            values = [conn_mode, bw, str(stats["count"]), str(stats["pass"]), str(stats["fail"])]
+            values = [str(conn_mode), str(bw), str(stats["count"]), str(stats["pass"]), str(stats["fail"])]
             for col_idx, value in enumerate(values):
                 cell = bc_table.rows[row_idx].cells[col_idx]
                 cell.text = value

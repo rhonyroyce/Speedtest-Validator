@@ -79,6 +79,23 @@ def extract_json(text: str) -> dict | list | None:
             except (json.JSONDecodeError, ValueError):
                 continue
 
+    # Final fallback: depth-tracking brace matcher for nested JSON
+    depth = 0
+    start_idx = None
+    for i, ch in enumerate(cleaned):
+        if ch == '{':
+            if depth == 0:
+                start_idx = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start_idx is not None:
+                try:
+                    return json.loads(cleaned[start_idx:i+1])
+                except (json.JSONDecodeError, ValueError):
+                    start_idx = None
+                    continue
+
     return None
 
 

@@ -3,10 +3,11 @@
 
 ollama:
   base_url: "http://localhost:11434"
-  vision_model: "qwen3-vl:8b"        # ~5GB VRAM — screenshot OCR/extraction
+  vision_model: "qwen2.5vl:7b"         # ~5GB VRAM — screenshot OCR/extraction
   analysis_model: "gpt-oss:20b"       # ~12GB VRAM — observations, recommendations, KPI impact
   vram_gb: 16                          # Total GPU VRAM — cannot run both models simultaneously
   unload_before_switch: true           # MUST unload one model before loading the other
+  vision_timeout: 600                   # Vision model timeout (seconds)
   max_retries: 3                       # JSON schema validation retries
   extraction_temperature: 0.15         # Low temp for deterministic extraction
   analysis_temperature: 0.3            # Slightly higher for narrative generation

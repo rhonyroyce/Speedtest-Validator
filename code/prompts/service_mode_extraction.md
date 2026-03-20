@@ -78,3 +78,5 @@ Return ONLY valid JSON matching this exact structure:
 - If a field label is present but value is blank/unreadable, return null
 - Do NOT assume NR_SB_Status from folder name — read it from the screenshot
 - Do NOT calculate derived values — extract raw readings only
+
+CRITICAL: Your entire response must be ONLY the JSON object. No explanation, no markdown code fences, no text before or after. Start with { and end with }.

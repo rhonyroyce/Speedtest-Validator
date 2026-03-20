@@ -227,9 +227,15 @@ class AnalysisEngine:
             lines.append("\n### Pass/Fail Status")
             lines.append(f"- DL Pass: {tr.get('dl_pass', 'N/A')}")
             lines.append(f"- UL Pass: {tr.get('ul_pass', 'N/A')}")
-            for sm in tr.get("service_mode", []):
-                lines.append(f"- {sm.get('parameter', '?')}: {sm.get('status', '?')} "
-                             f"(measured={sm.get('measured')}, range={sm.get('range')})")
+            sm_results = tr.get("service_mode", {})
+            if isinstance(sm_results, dict):
+                for param, result in sm_results.items():
+                    if isinstance(result, dict):
+                        lines.append(
+                            f"- {param.upper()}: {result.get('pass_fail', '?')} "
+                            f"(measured={result.get('value')}, "
+                            f"range={result.get('min')}~{result.get('max')})"
+                        )
 
         # RF observations from knowledge engine
         obs = context.get("rf_observations", [])
