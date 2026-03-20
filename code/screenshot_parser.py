@@ -22,8 +22,27 @@ logger = logging.getLogger(__name__)
 # Pydantic schemas for VLM JSON validation
 # ---------------------------------------------------------------------------
 
+def _strip_units(value: Any) -> Any:
+    """Strip common RF unit suffixes so Pydantic can parse as number.
+
+    Handles: "20 MHz", "-23 dBm", "15kHz", "-52.3dBm", "100 Mbps",
+             "-3.5 dB", "30 dB", "2.1 ratio", etc.
+    """
+    if not isinstance(value, str):
+        return value
+    import re
+    cleaned = re.sub(
+        r'\s*(MHz|dBm|dB|kHz|Mbps|bps|ms|pct|%|ratio)\s*$',
+        '', value.strip(), flags=re.IGNORECASE,
+    )
+    if not cleaned:
+        return value
+    return cleaned
+
+
 def _sanitize_numeric_fields(data: dict) -> dict:
-    """Convert VLM placeholder strings ('--', 'N/A', '') to None for numeric fields."""
+    """Convert VLM placeholder strings ('--', 'N/A', '') to None for numeric fields,
+    and strip unit suffixes so Pydantic can parse as number."""
     if not isinstance(data, dict):
         return data
     placeholders = {"--", "---", "N/A", "n/a", "NA", "null", "None", ""}
@@ -31,6 +50,8 @@ def _sanitize_numeric_fields(data: dict) -> dict:
     for k, v in data.items():
         if isinstance(v, str) and v.strip() in placeholders:
             sanitized[k] = None
+        elif isinstance(v, str):
+            sanitized[k] = _strip_units(v)
         else:
             sanitized[k] = v
     return sanitized
