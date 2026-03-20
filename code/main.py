@@ -6,9 +6,9 @@ generates analysis via gpt-oss:20b, and produces Output.xlsx + RF_Throughput_Ana
 
 Usage:
     # Full site processing
-    python -m code.main --site-folder ./SFY0803A \\
-        --ciq ./SFY0803A_MMBB_CIQ_EXPORT_*.xlsx \\
-        --output-dir ./outputs
+        cd /home/k8s/Projects/Speedtest-Validator
+python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx --output-dir ./outputs
+
 
     # Dry run (2 screenshots only)
     python -m code.main --site-folder ./SFY0803A \\
@@ -116,9 +116,9 @@ class DASValidator:
             lte = sm.get("lte_params") or {}
             nr = sm.get("nr_params") or {}
 
-            earfcn = lte.get("earfcn") or lte.get("earfcnDl")
-            arfcn = nr.get("arfcn") or nr.get("arfcnDl")
-            pci = lte.get("pci") or nr.get("pci")
+            earfcn = lte.get("earfcn")
+            arfcn = nr.get("nr_arfcn")
+            pci = lte.get("pci") or nr.get("nr_pci")
 
             # Convert to int safely
             earfcn = int(earfcn) if earfcn is not None else None
@@ -148,10 +148,10 @@ class DASValidator:
             nr = sm.get("nr_params") or {}
 
             # Service mode check
-            rsrp = lte.get("rsrp") or nr.get("rsrp")
-            sinr = lte.get("sinr") or nr.get("sinr")
-            rsrq = lte.get("rsrq") or nr.get("rsrq")
-            tx_power = lte.get("tx_power") or nr.get("tx_power")
+            rsrp = lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm")
+            sinr = lte.get("sinr_db") or nr.get("nr5g_sinr_db")
+            rsrq = lte.get("rsrq_db") or nr.get("nr5g_rsrq_db")
+            tx_power = lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm")
 
             sm_result = self.threshold_engine.check_service_mode(
                 rsrp=float(rsrp) if rsrp is not None else 0.0,
@@ -166,7 +166,7 @@ class DASValidator:
 
             # Determine BW components for lookup
             bw_lte = int(result.get("bandwidth_mhz", 0)) if lte else 0
-            bw_nr_c1 = int(nr.get("bandwidth_mhz") or nr.get("channelBandwidth") or 0)
+            bw_nr_c1 = int(nr.get("nr_bandwidth_mhz") or 0)
             bw_nr_c2 = int(nr.get("bandwidth_c2_mhz") or 0)
 
             # If we have CIQ data for NR bandwidth, prefer that
@@ -245,11 +245,11 @@ class DASValidator:
                 "tech_sector": result.get("tech_subfolder", ""),
                 "connection_mode": sm.get("connection_mode", "LTE Only"),
                 "bandwidth": result.get("bandwidth_mhz", ""),
-                "pci": lte.get("pci") or nr.get("pci") or "",
-                "rsrp": lte.get("rsrp") or nr.get("rsrp") or "",
-                "rsrq": lte.get("rsrq") or nr.get("rsrq") or "",
-                "sinr": lte.get("sinr") or nr.get("sinr") or "",
-                "tx_power": lte.get("tx_power") or nr.get("tx_power") or "",
+                "pci": lte.get("pci") or nr.get("nr_pci") or "",
+                "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm") or "",
+                "rsrq": lte.get("rsrq_db") or nr.get("nr5g_rsrq_db") or "",
+                "sinr": lte.get("sinr_db") or nr.get("nr5g_sinr_db") or "",
+                "tx_power": lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm") or "",
                 "sm_st_duration": result.get("duration_sec", ""),
                 "dl_throughput": st.get("dl_throughput_mbps") or "",
                 "ul_throughput": st.get("ul_throughput_mbps") or "",
