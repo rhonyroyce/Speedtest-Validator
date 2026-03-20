@@ -8,7 +8,8 @@ Reference: DAS_Validation_Thresholds.xlsx (SISO + MIMO sheets, 16 BW combos each
 Implementation: Claude Code Prompt 5 (Knowledge Engine)
 """
 from pathlib import Path
-# TODO: import openpyxl when implementing
+
+import openpyxl
 
 
 # Sheet names in DAS_Validation_Thresholds.xlsx
@@ -77,14 +78,81 @@ def load_threshold_excel(excel_path: str | Path) -> dict:
         FileNotFoundError: If Excel file doesn't exist
         ValueError: If sheets are missing or data format unexpected
     """
-    # TODO: Implement with openpyxl
-    # - Open workbook (read_only=True, data_only=True)
-    # - Load Service Mode Thresholds sheet → simple dict
-    # - Load SISO Speed Test sheet → list of row dicts (16 rows)
-    # - Load MIMO Speed Test sheet → list of row dicts (16 rows)
-    # - Validate: each sheet has expected number of rows/columns
-    # - Return structured dict
-    raise NotImplementedError("Implement in Claude Code Prompt 6")
+    excel_path = Path(excel_path)
+    if not excel_path.exists():
+        raise FileNotFoundError(f"Threshold Excel not found: {excel_path}")
+
+    wb = openpyxl.load_workbook(str(excel_path), read_only=True, data_only=True)
+
+    # --- Service Mode Thresholds ---
+    sm_sheet_name = SHEET_NAMES["service_mode"]
+    if sm_sheet_name not in wb.sheetnames:
+        raise ValueError(f"Missing sheet: {sm_sheet_name}")
+    ws_sm = wb[sm_sheet_name]
+    sm_rows = list(ws_sm.iter_rows(values_only=True))
+    # Row 0 = header, Row 1 = Radio End, Row 2 = Antenna End
+    service_mode = {}
+    for row in sm_rows[1:]:
+        location = row[0]
+        service_mode[location] = {
+            "rsrp_min": row[1],
+            "rsrp_max": row[2],
+            "sinr_min": row[3],
+            "rsrq_min": row[4],
+            "rsrq_max": row[5],
+            "tx_power": row[6],
+        }
+
+    # --- Helper to parse speed test sheet ---
+    def _parse_speed_sheet(sheet_name: str) -> list[dict]:
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"Missing sheet: {sheet_name}")
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        # Row 0 = header, rows 1-16 = data
+        data_rows = []
+        for row in rows[1:]:
+            if row[0] is None:
+                continue
+            row_dict = {}
+            for col_name, col_idx in COLUMN_MAP.items():
+                if col_idx < len(row):
+                    row_dict[col_name] = row[col_idx]
+                else:
+                    row_dict[col_name] = None
+            data_rows.append(row_dict)
+        return data_rows
+
+    siso_rows = _parse_speed_sheet(SHEET_NAMES["siso"])
+    mimo_rows = _parse_speed_sheet(SHEET_NAMES["mimo"])
+
+    # --- Physical Thresholds Lookup (optional) ---
+    physical = []
+    phys_sheet = "Physical Thresholds Lookup"
+    if phys_sheet in wb.sheetnames:
+        ws_phys = wb[phys_sheet]
+        phys_rows = list(ws_phys.iter_rows(values_only=True))
+        for row in phys_rows[1:]:
+            if row[0] is None:
+                continue
+            physical.append({
+                "parameter": row[0],
+                "band": row[1],
+                "condition": row[2],
+                "min_value": row[3],
+                "max_value": row[4],
+                "unit": row[5],
+                "equipment": row[6],
+            })
+
+    wb.close()
+
+    return {
+        "service_mode": service_mode,
+        "siso": siso_rows,
+        "mimo": mimo_rows,
+        "physical": physical,
+    }
 
 
 def find_threshold_row(
@@ -104,11 +172,12 @@ def find_threshold_row(
     Returns:
         Matching row dict, or None if no match found
     """
-    # TODO: Implement exact-match lookup
-    # - Iterate rows
-    # - Match bw_lte == row['bw_lte'] AND bw_nr_c1 == row['bw_nr_c1'] AND bw_nr_c2 == row['bw_nr_c2']
-    # - Return first match or None
-    raise NotImplementedError("Implement in Claude Code Prompt 6")
+    for row in rows:
+        if (row.get("bw_lte") == bw_lte_mhz
+                and row.get("bw_nr_c1") == bw_nr_c1_mhz
+                and row.get("bw_nr_c2") == bw_nr_c2_mhz):
+            return row
+    return None
 
 
 def get_progressive_ul_threshold(row: dict, sinr_db: float) -> float | None:
@@ -124,8 +193,16 @@ def get_progressive_ul_threshold(row: dict, sinr_db: float) -> float | None:
     Returns:
         UL threshold in Mbps, or None if SINR too low for progressive lookup
     """
-    # TODO: Implement progressive UL lookup
-    # - Find the nearest lower SINR level from PROGRESSIVE_UL_SINR_LEVELS
-    # - Return the corresponding UL threshold from the row
-    # - If SINR < 15, return None (below minimum progressive level)
-    raise NotImplementedError("Implement in Claude Code Prompt 6")
+    if sinr_db < PROGRESSIVE_UL_SINR_LEVELS[0]:
+        return None
+
+    # Find nearest lower SINR level
+    selected_sinr = PROGRESSIVE_UL_SINR_LEVELS[0]
+    for level in PROGRESSIVE_UL_SINR_LEVELS:
+        if level <= sinr_db:
+            selected_sinr = level
+        else:
+            break
+
+    col_key = f"ul_sinr_{selected_sinr}"
+    return row.get(col_key)

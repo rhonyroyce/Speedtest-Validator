@@ -133,11 +133,14 @@ def get_theoretical_peak(tech: str, mimo_config: str, bw_mhz: int, direction: st
     Returns:
         Dict with peak and typical_das values, or None if not found
     """
-    # TODO: Implement lookup logic
-    # - Select DL or UL table
-    # - Navigate tech → mimo_config → bw_mhz
-    # - Return {"peak": x, "typical_das": y} or None
-    raise NotImplementedError("Implement in Claude Code Prompt 5")
+    table = THEORETICAL_DL_PEAKS if direction.lower() == "dl" else THEORETICAL_UL_PEAKS
+    tech_data = table.get(tech)
+    if tech_data is None:
+        return None
+    mimo_data = tech_data.get(mimo_config)
+    if mimo_data is None:
+        return None
+    return mimo_data.get(bw_mhz)
 
 
 def compute_throughput_efficiency(measured_mbps: float, theoretical_peak: float) -> float:

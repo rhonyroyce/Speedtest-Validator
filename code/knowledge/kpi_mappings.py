@@ -139,13 +139,55 @@ def get_kpi_impacts(rf_data: dict) -> list[dict]:
     Returns:
         List of impact dicts: [{domain, kpi, description}, ...]
     """
-    # TODO: Implement evaluation logic
-    # - Iterate through RF_TO_KPI_MAPPINGS
-    # - For each mapping, check if trigger condition is met
-    # - Collect all matching impacts
-    # - Deduplicate by (domain, kpi)
-    # - Return sorted by domain priority (AVL > ACC > RET > CAP > MOB > PWR)
-    raise NotImplementedError("Implement in Claude Code Prompt 5")
+    domain_priority = ["AVL", "ACC", "RET", "CAP", "MOB", "PWR"]
+
+    # Map condition keys to rf_data keys
+    param_for_condition = {
+        "low_rsrp": "rsrp",
+        "low_sinr": "sinr",
+        "sinr_interference": "sinr",
+        "poor_rsrq": "rsrq",
+        "high_tx_power": "tx_power",
+        "dl_fail": "dl_delta",
+        "ul_fail": "ul_delta",
+        "high_bler": "bler",
+    }
+
+    seen = set()
+    impacts = []
+
+    for condition_key, mapping in RF_TO_KPI_MAPPINGS.items():
+        trigger = mapping.get("trigger")
+        if trigger is None:
+            continue
+
+        data_key = param_for_condition.get(condition_key)
+        if data_key is None or data_key not in rf_data:
+            continue
+
+        value = rf_data[data_key]
+        if value is None:
+            continue
+
+        try:
+            if not trigger(value):
+                continue
+        except (TypeError, ValueError):
+            continue
+
+        for domain, kpi, description in mapping["impacts"]:
+            dedup_key = (domain, kpi)
+            if dedup_key not in seen:
+                seen.add(dedup_key)
+                impacts.append({
+                    "domain": domain,
+                    "kpi": kpi,
+                    "description": description,
+                })
+
+    impacts.sort(key=lambda x: domain_priority.index(x["domain"])
+                 if x["domain"] in domain_priority else 99)
+    return impacts
 
 
 def format_kpi_impact_text(impacts: list[dict]) -> str:
@@ -157,8 +199,21 @@ def format_kpi_impact_text(impacts: list[dict]) -> str:
     Returns:
         Formatted multi-line string for the 'Impact on KPIs' cell
     """
-    # TODO: Implement formatting
-    # - Group by domain
-    # - Format each as "[DOMAIN] KPI_NAME: description"
-    # - Join with newlines
-    raise NotImplementedError("Implement in Claude Code Prompt 5")
+    if not impacts:
+        return ""
+
+    # Group by domain preserving order
+    from collections import OrderedDict
+    grouped = OrderedDict()
+    for imp in impacts:
+        domain = imp["domain"]
+        if domain not in grouped:
+            grouped[domain] = []
+        grouped[domain].append(imp)
+
+    lines = []
+    for domain, items in grouped.items():
+        for item in items:
+            lines.append(f"[{domain}] {item['kpi']}: {item['description']}")
+
+    return "\n".join(lines)

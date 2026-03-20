@@ -134,9 +134,64 @@ def generate_observation(param: str, value: float, **kwargs) -> str:
     Returns:
         Formatted observation string
     """
-    # TODO: Implement full observation generation logic
-    # - Classify the parameter value
-    # - Select appropriate template from OBSERVATION_TEMPLATES
-    # - Format with value and any kwargs
-    # - Return the formatted observation string
-    raise NotImplementedError("Implement in Claude Code Prompt 5")
+    param = param.lower()
+
+    if param == "rsrp":
+        classification = classify_rsrp(value)
+        quality = classification["quality"]
+        # Map quality to template key
+        if quality in ("excellent", "good"):
+            key = f"rsrp_{quality}"
+        elif quality == "fair":
+            key = "rsrp_fair"
+        else:
+            key = "rsrp_poor"
+    elif param == "sinr":
+        classification = classify_sinr(value)
+        quality = classification["quality"]
+        if quality == "excellent":
+            key = "sinr_excellent"
+        elif quality == "good":
+            key = "sinr_good"
+        elif quality == "fair":
+            key = "sinr_fair"
+        else:
+            key = "sinr_poor"
+    elif param == "rsrq":
+        classification = classify_rsrq(value)
+        quality = classification["quality"]
+        if quality in ("excellent", "good"):
+            key = "rsrq_good"
+        elif quality == "fair":
+            key = "rsrq_fair"
+        else:
+            key = "rsrq_poor"
+    elif param == "tx_power":
+        if value < 0:
+            key = "tx_power_normal"
+        else:
+            key = "tx_power_elevated"
+    elif param == "dl":
+        threshold = kwargs.get("threshold", 0)
+        delta = value - threshold
+        if delta >= 0:
+            key = "dl_pass"
+        else:
+            key = "dl_fail"
+        kwargs = {**kwargs, "delta": round(abs(delta), 1)}
+    elif param == "ul":
+        threshold = kwargs.get("threshold", 0)
+        delta = value - threshold
+        if delta >= 0:
+            key = "ul_pass"
+        else:
+            key = "ul_fail"
+        kwargs = {**kwargs, "delta": round(abs(delta), 1)}
+    else:
+        return f"{param} = {value}"
+
+    template = OBSERVATION_TEMPLATES.get(key)
+    if template is None:
+        return f"{param} = {value}"
+
+    return template.format(value=value, **kwargs)
