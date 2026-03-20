@@ -8,7 +8,7 @@ Implementation: Claude Code Prompt 5 (Knowledge Engine)
 """
 import logging
 
-from code.knowledge import rf_parameters, throughput_benchmarks, kpi_mappings, mop_thresholds
+from .knowledge import rf_parameters, throughput_benchmarks, kpi_mappings, mop_thresholds
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
-from code.utils.excel_utils import convert_bw_khz_to_mhz, read_sheet_as_dicts, safe_int
+from .utils.excel_utils import convert_bw_khz_to_mhz, read_sheet_as_dicts, safe_int
 
 logger = logging.getLogger(__name__)
 

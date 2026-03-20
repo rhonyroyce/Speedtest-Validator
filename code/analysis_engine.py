@@ -13,7 +13,7 @@ Implementation: Claude Code Prompt 7 (Analysis Engine)
 import logging
 import os
 
-from code.utils.text_utils import (
+from .utils.text_utils import (
     strip_thinking_tags,
     strip_markdown_fences,
     clean_unicode,

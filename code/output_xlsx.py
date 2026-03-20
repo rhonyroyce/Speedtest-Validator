@@ -29,7 +29,7 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from code.utils.text_utils import truncate_for_cell
+from .utils.text_utils import truncate_for_cell
 
 logger = logging.getLogger(__name__)
 

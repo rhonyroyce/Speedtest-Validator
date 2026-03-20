@@ -6,12 +6,12 @@ generates analysis via gpt-oss:20b, and produces Output.xlsx + RF_Throughput_Ana
 
 Usage:
     # Full site processing
-    python code/main.py --site-folder ./SFY0803A \\
+    python -m code.main --site-folder ./SFY0803A \\
         --ciq ./SFY0803A_MMBB_CIQ_EXPORT_*.xlsx \\
         --output-dir ./outputs
 
     # Dry run (2 screenshots only)
-    python code/main.py --site-folder ./SFY0803A \\
+    python -m code.main --site-folder ./SFY0803A \\
         --ciq ./SFY0803A_MMBB_CIQ_EXPORT_*.xlsx \\
         --dry-run
 
@@ -26,15 +26,15 @@ from pathlib import Path
 
 import yaml
 
-from code.analysis_engine import AnalysisEngine
-from code.ciq_reader import CIQReader
-from code.knowledge_engine import KnowledgeEngine
-from code.ollama_client import OllamaClient
-from code.output_docx import OutputDocxGenerator
-from code.output_xlsx import OutputXlsxGenerator
-from code.screenshot_parser import ScreenshotParser
-from code.threshold_engine import ThresholdEngine
-from code.utils.file_utils import discover_screenshots, pair_screenshots
+from .analysis_engine import AnalysisEngine
+from .ciq_reader import CIQReader
+from .knowledge_engine import KnowledgeEngine
+from .ollama_client import OllamaClient
+from .output_docx import OutputDocxGenerator
+from .output_xlsx import OutputXlsxGenerator
+from .screenshot_parser import ScreenshotParser
+from .threshold_engine import ThresholdEngine
+from .utils.file_utils import discover_screenshots, pair_screenshots
 
 logger = logging.getLogger(__name__)
 

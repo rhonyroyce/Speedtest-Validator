@@ -12,8 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from code.ollama_client import OllamaClient
-from code.utils.file_utils import discover_screenshots, pair_screenshots
+from .ollama_client import OllamaClient
+from .utils.file_utils import discover_screenshots, pair_screenshots
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,11 @@ class LTEParams(BaseModel):
     dcnr_restriction: str | None = None
     ca_status: str | None = None
     ul_ca_status: str | None = None
+
+    @field_validator("mimo_configured", mode="before")
+    @classmethod
+    def coerce_mimo_to_str(cls, v: Any) -> str | None:
+        return str(v) if v is not None else None
 
 
 class NRParams(BaseModel):

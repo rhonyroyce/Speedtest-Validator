@@ -11,7 +11,7 @@ import time
 import urllib.error
 import urllib.request
 
-from code.utils.text_utils import extract_json as _extract_json_text
+from .utils.text_utils import extract_json as _extract_json_text
 
 logger = logging.getLogger(__name__)
 

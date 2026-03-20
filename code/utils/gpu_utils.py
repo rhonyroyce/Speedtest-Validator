@@ -4,7 +4,7 @@ Both Ollama host GPUs are NVIDIA, so RAPIDS can accelerate data processing
 when available. This module auto-detects RAPIDS and falls back gracefully.
 
 Usage:
-    from code.utils.gpu_utils import read_csv, to_pandas, gpu_info, GPU_BACKEND
+    from .gpu_utils import read_csv, to_pandas, gpu_info, GPU_BACKEND
 """
 
 # Attempt RAPIDS import — graceful fallback to pandas/sklearn

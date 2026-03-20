@@ -10,7 +10,7 @@ Implementation: Claude Code Prompt 6 (Threshold Engine)
 """
 import logging
 
-from code.knowledge import rf_parameters, mop_thresholds
+from .knowledge import rf_parameters, mop_thresholds
 
 logger = logging.getLogger(__name__)
 
