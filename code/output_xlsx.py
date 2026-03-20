@@ -14,34 +14,406 @@ Row count is DYNAMIC — depends on (sectors × technologies per sector).
 
 Implementation: Claude Code Prompt 8 (Output Generation)
 """
-# TODO: Implement OutputXlsxGenerator class with:
-# - __init__(config) — load config, set output path
-# - generate(results, threshold_data) — create complete workbook
-# - _create_results_tab(ws, results) — write Tab 1 with 16 columns + formatting
-# - _create_threshold_tab(ws, threshold_data) — write Tab 2 reference tables
-# - _apply_conditional_formatting(ws) — color-code PASS/FAIL, RSRP/SINR ranges
-# - _set_column_widths(ws) — auto-size columns for readability
-# - _write_header_row(ws) — bold headers with filter
-# - _write_data_row(ws, row_num, cell_result) — one row per cell tested
-#
-# Column definitions (16 columns):
-#   A: BTS (site ID)
-#   B: Tech/Sector (e.g., "L19/Sector 1")
-#   C: Connection Mode (LTE Only / NR SA / EN-DC / NR-DC)
-#   D: Bandwidth (e.g., "20 MHz LTE + 100 MHz NR")
-#   E: PCI
-#   F: RSRP (dBm)
-#   G: RSRQ (dB)
-#   H: SINR (dB)
-#   I: UE TX Power (dBm)
-#   J: SM-ST Duration (seconds between Service Mode and Speedtest screenshots)
-#   K: DL Throughput (Mbps)
-#   L: UL Throughput (Mbps)
-#   M: Comment (PASS/FAIL with delta from threshold)
-#   N: Observations (from analysis engine)
-#   O: Recommendations (from analysis engine)
-#   P: Impact on KPIs (from analysis engine)
-#
-# Dependencies:
-#   - openpyxl
-#   - code/config.py (for output path, column config)
+import logging
+from pathlib import Path
+
+from openpyxl import Workbook
+from openpyxl.styles import (
+    Alignment,
+    Font,
+    PatternFill,
+    Border,
+    Side,
+    numbers,
+)
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
+
+from code.utils.text_utils import truncate_for_cell
+
+logger = logging.getLogger(__name__)
+
+# 16 output columns (A–P)
+COLUMNS = [
+    "BTS",
+    "Tech/Sector",
+    "Connection Mode",
+    "Bandwidth",
+    "PCI",
+    "RSRP",
+    "RSRQ",
+    "SINR",
+    "UE TX Power",
+    "SM-ST Duration",
+    "DL Throughput",
+    "UL Throughput",
+    "Comment",
+    "Observations",
+    "Recommendations",
+    "Impact on KPIs",
+]
+
+# Suggested column widths (characters)
+COLUMN_WIDTHS = {
+    "BTS": 14,
+    "Tech/Sector": 18,
+    "Connection Mode": 16,
+    "Bandwidth": 28,
+    "PCI": 8,
+    "RSRP": 10,
+    "RSRQ": 10,
+    "SINR": 10,
+    "UE TX Power": 13,
+    "SM-ST Duration": 15,
+    "DL Throughput": 15,
+    "UL Throughput": 15,
+    "Comment": 40,
+    "Observations": 50,
+    "Recommendations": 50,
+    "Impact on KPIs": 50,
+}
+
+# Wrap-text columns
+WRAP_COLUMNS = {"Observations", "Recommendations", "Impact on KPIs", "Comment"}
+
+# Style constants
+HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
+PASS_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+FAIL_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+THIN_BORDER = Border(
+    left=Side(style="thin"),
+    right=Side(style="thin"),
+    top=Side(style="thin"),
+    bottom=Side(style="thin"),
+)
+
+# RSRP color gradient (excellent → poor)
+RSRP_FILLS = {
+    "excellent": PatternFill(start_color="00B050", end_color="00B050", fill_type="solid"),
+    "good": PatternFill(start_color="92D050", end_color="92D050", fill_type="solid"),
+    "fair": PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid"),
+    "poor": PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid"),
+}
+
+# SINR color gradient
+SINR_FILLS = {
+    "excellent": PatternFill(start_color="00B050", end_color="00B050", fill_type="solid"),
+    "good": PatternFill(start_color="92D050", end_color="92D050", fill_type="solid"),
+    "fair": PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid"),
+    "poor": PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid"),
+}
+
+
+class OutputXlsxGenerator:
+    """Creates the Output.xlsx workbook with validation results and threshold reference."""
+
+    def __init__(self, config: dict):
+        self.config = config
+        self.output_cfg = config.get("output", {})
+        self.site_name = self.output_cfg.get("site_name", "UNKNOWN")
+
+    def generate(
+        self,
+        results: list[dict],
+        threshold_data: dict,
+        output_path: str | Path,
+    ) -> Path:
+        """Create the complete Output.xlsx workbook.
+
+        Args:
+            results: List of cell result dicts (one per tested cell).
+            threshold_data: Dict from mop_thresholds.load_threshold_excel()
+                            with keys: service_mode, siso, mimo, physical.
+            output_path: File path for the output workbook.
+
+        Returns:
+            Path to the written file.
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        wb = Workbook()
+
+        # Tab 1 — Validation Results (default sheet)
+        ws_results = wb.active
+        ws_results.title = "Validation Results"
+        self._create_results_tab(ws_results, results)
+
+        # Tab 2 — Thresholds Reference
+        ws_thresh = wb.create_sheet("Thresholds Reference")
+        self._create_threshold_tab(ws_thresh, threshold_data)
+
+        wb.save(str(output_path))
+        logger.info("Output XLSX written to %s (%d rows)", output_path, len(results))
+        return output_path
+
+    # ------------------------------------------------------------------
+    # Tab 1: Validation Results
+    # ------------------------------------------------------------------
+
+    def _create_results_tab(self, ws: Worksheet, results: list[dict]) -> None:
+        """Write Tab 1 with 16 columns, formatting, and conditional fills."""
+        self._write_header_row(ws)
+
+        for row_idx, cell_result in enumerate(results, start=2):
+            self._write_data_row(ws, row_idx, cell_result)
+
+        self._set_column_widths(ws)
+
+        # Enable auto-filter on header row
+        last_col = get_column_letter(len(COLUMNS))
+        last_row = max(len(results) + 1, 2)
+        ws.auto_filter.ref = f"A1:{last_col}{last_row}"
+
+        # Freeze top row
+        ws.freeze_panes = "A2"
+
+    def _write_header_row(self, ws: Worksheet) -> None:
+        """Write bold, styled header row with all 16 column names."""
+        for col_idx, col_name in enumerate(COLUMNS, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = THIN_BORDER
+
+    def _write_data_row(self, ws: Worksheet, row_num: int, cell_result: dict) -> None:
+        """Write one row of validation results and apply conditional formatting."""
+        # Extract values from the result dict
+        values = [
+            cell_result.get("bts", self.site_name),
+            cell_result.get("tech_sector", ""),
+            cell_result.get("connection_mode", ""),
+            cell_result.get("bandwidth", ""),
+            cell_result.get("pci", ""),
+            cell_result.get("rsrp"),
+            cell_result.get("rsrq"),
+            cell_result.get("sinr"),
+            cell_result.get("tx_power"),
+            cell_result.get("sm_st_duration"),
+            cell_result.get("dl_throughput"),
+            cell_result.get("ul_throughput"),
+            cell_result.get("comment", ""),
+            truncate_for_cell(cell_result.get("observations", "")),
+            truncate_for_cell(cell_result.get("recommendations", "")),
+            truncate_for_cell(cell_result.get("kpi_impact", "")),
+        ]
+
+        for col_idx, value in enumerate(values, start=1):
+            cell = ws.cell(row=row_num, column=col_idx, value=value)
+            cell.border = THIN_BORDER
+            col_name = COLUMNS[col_idx - 1]
+
+            # Wrap text for long-content columns
+            if col_name in WRAP_COLUMNS:
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+            else:
+                cell.alignment = Alignment(vertical="center")
+
+            # Number formatting for numeric columns
+            if col_name in ("RSRP", "RSRQ", "SINR", "UE TX Power"):
+                if isinstance(value, (int, float)):
+                    cell.number_format = "0.0"
+            elif col_name in ("DL Throughput", "UL Throughput"):
+                if isinstance(value, (int, float)):
+                    cell.number_format = "0.00"
+            elif col_name == "SM-ST Duration":
+                if isinstance(value, (int, float)):
+                    cell.number_format = "0"
+
+        # --- Conditional formatting ---
+
+        # Comment column (M) — PASS/FAIL coloring
+        comment = str(cell_result.get("comment", "")).upper()
+        comment_cell = ws.cell(row=row_num, column=13)
+        if "PASS" in comment and "FAIL" not in comment:
+            comment_cell.fill = PASS_FILL
+        elif "FAIL" in comment:
+            comment_cell.fill = FAIL_FILL
+
+        # RSRP (F) — quality gradient
+        rsrp = cell_result.get("rsrp")
+        if isinstance(rsrp, (int, float)):
+            fill = self._get_rsrp_fill(rsrp)
+            if fill:
+                ws.cell(row=row_num, column=6).fill = fill
+
+        # SINR (H) — quality gradient
+        sinr = cell_result.get("sinr")
+        if isinstance(sinr, (int, float)):
+            fill = self._get_sinr_fill(sinr)
+            if fill:
+                ws.cell(row=row_num, column=8).fill = fill
+
+        # RSRQ (G) — quality gradient
+        rsrq = cell_result.get("rsrq")
+        if isinstance(rsrq, (int, float)):
+            fill = self._get_rsrq_fill(rsrq)
+            if fill:
+                ws.cell(row=row_num, column=7).fill = fill
+
+    # ------------------------------------------------------------------
+    # Tab 2: Thresholds Reference
+    # ------------------------------------------------------------------
+
+    def _create_threshold_tab(self, ws: Worksheet, threshold_data: dict) -> None:
+        """Write threshold reference tables: SISO, MIMO, Service Mode."""
+        current_row = 1
+
+        # --- SISO Speed Test ---
+        current_row = self._write_speed_table(
+            ws, current_row, "SISO Speed Test Thresholds", threshold_data.get("siso", [])
+        )
+
+        # Blank separator row
+        current_row += 2
+
+        # --- MIMO Speed Test ---
+        current_row = self._write_speed_table(
+            ws, current_row, "MIMO Speed Test Thresholds", threshold_data.get("mimo", [])
+        )
+
+        # Blank separator row
+        current_row += 2
+
+        # --- Service Mode Thresholds ---
+        current_row = self._write_service_mode_table(
+            ws, current_row, threshold_data.get("service_mode", {})
+        )
+
+        # Auto-size columns
+        for col_idx in range(1, 30):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = 14
+
+    def _write_speed_table(
+        self, ws: Worksheet, start_row: int, title: str, rows: list[dict]
+    ) -> int:
+        """Write a SISO or MIMO speed test threshold table.
+
+        Returns:
+            Next available row number.
+        """
+        # Title row
+        title_cell = ws.cell(row=start_row, column=1, value=title)
+        title_cell.font = Font(bold=True, size=12)
+        start_row += 1
+
+        # Header row
+        speed_headers = [
+            "Config", "BW LTE", "BW NR C1", "BW NR C2",
+            "LTE DL Min", "LTE DL Max", "NR DL Min", "NR DL Max",
+            "EN-DC DL Min", "EN-DC DL Max", "NR-DC DL Min", "NR-DC DL Max",
+            "LTE UL Min", "LTE UL Max", "NR UL Min", "NR UL Max",
+            "EN-DC UL Min", "EN-DC UL Max",
+            "UL SINR 15", "UL SINR 19", "UL SINR 20", "UL SINR 22",
+            "UL SINR 24", "UL SINR 26", "UL SINR 28", "UL SINR 30",
+        ]
+        for col_idx, header in enumerate(speed_headers, start=1):
+            cell = ws.cell(row=start_row, column=col_idx, value=header)
+            cell.font = Font(bold=True, size=9)
+            cell.fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+            cell.border = THIN_BORDER
+        start_row += 1
+
+        # Data rows
+        col_keys = [
+            "config", "bw_lte", "bw_nr_c1", "bw_nr_c2",
+            "lte_dl_min", "lte_dl_max", "nr_dl_min", "nr_dl_max",
+            "endc_dl_min", "endc_dl_max", "nrdc_dl_min", "nrdc_dl_max",
+            "lte_ul_min", "lte_ul_max", "nr_ul_min", "nr_ul_max",
+            "endc_ul_min", "endc_ul_max",
+            "ul_sinr_15", "ul_sinr_19", "ul_sinr_20", "ul_sinr_22",
+            "ul_sinr_24", "ul_sinr_26", "ul_sinr_28", "ul_sinr_30",
+        ]
+        for row_data in rows:
+            for col_idx, key in enumerate(col_keys, start=1):
+                cell = ws.cell(row=start_row, column=col_idx, value=row_data.get(key))
+                cell.border = THIN_BORDER
+                if isinstance(row_data.get(key), (int, float)):
+                    cell.number_format = "0.0"
+            start_row += 1
+
+        return start_row
+
+    def _write_service_mode_table(
+        self, ws: Worksheet, start_row: int, service_mode: dict
+    ) -> int:
+        """Write Service Mode threshold reference table.
+
+        Returns:
+            Next available row number.
+        """
+        title_cell = ws.cell(row=start_row, column=1, value="Service Mode Thresholds")
+        title_cell.font = Font(bold=True, size=12)
+        start_row += 1
+
+        # Header
+        sm_headers = [
+            "Location", "RSRP Min", "RSRP Max", "SINR Min",
+            "RSRQ Min", "RSRQ Max", "TX Power",
+        ]
+        for col_idx, header in enumerate(sm_headers, start=1):
+            cell = ws.cell(row=start_row, column=col_idx, value=header)
+            cell.font = Font(bold=True, size=9)
+            cell.fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+            cell.border = THIN_BORDER
+        start_row += 1
+
+        # Data rows
+        sm_keys = ["rsrp_min", "rsrp_max", "sinr_min", "rsrq_min", "rsrq_max", "tx_power"]
+        for location, params in service_mode.items():
+            ws.cell(row=start_row, column=1, value=location).border = THIN_BORDER
+            for col_idx, key in enumerate(sm_keys, start=2):
+                cell = ws.cell(row=start_row, column=col_idx, value=params.get(key))
+                cell.border = THIN_BORDER
+            start_row += 1
+
+        return start_row
+
+    def _set_column_widths(self, ws: Worksheet) -> None:
+        """Set column widths based on COLUMN_WIDTHS mapping."""
+        for col_idx, col_name in enumerate(COLUMNS, start=1):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = COLUMN_WIDTHS.get(col_name, 14)
+
+    # ------------------------------------------------------------------
+    # Color helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _get_rsrp_fill(value: float) -> PatternFill | None:
+        if value >= -40:
+            return RSRP_FILLS["excellent"]
+        elif value >= -75:
+            return RSRP_FILLS["good"]
+        elif value >= -90:
+            return RSRP_FILLS["fair"]
+        elif value >= -140:
+            return RSRP_FILLS["poor"]
+        return None
+
+    @staticmethod
+    def _get_sinr_fill(value: float) -> PatternFill | None:
+        if value >= 25:
+            return SINR_FILLS["excellent"]
+        elif value >= 15:
+            return SINR_FILLS["good"]
+        elif value >= 5:
+            return SINR_FILLS["fair"]
+        elif value >= -20:
+            return SINR_FILLS["poor"]
+        return None
+
+    @staticmethod
+    def _get_rsrq_fill(value: float) -> PatternFill | None:
+        if value >= -3:
+            return RSRP_FILLS["excellent"]
+        elif value >= -7:
+            return RSRP_FILLS["good"]
+        elif value >= -12:
+            return RSRP_FILLS["fair"]
+        elif value >= -20:
+            return RSRP_FILLS["poor"]
+        return None
