@@ -7,9 +7,12 @@ threshold_engine.py uses for pass/fail determination.
 Reference: DAS_Validation_Thresholds.xlsx (SISO + MIMO sheets, 16 BW combos each)
 Implementation: Claude Code Prompt 5 (Knowledge Engine)
 """
+import logging
 from pathlib import Path
 
 import openpyxl
+
+logger = logging.getLogger(__name__)
 
 
 # Sheet names in DAS_Validation_Thresholds.xlsx
@@ -126,9 +129,11 @@ def load_threshold_excel(excel_path: str | Path) -> dict:
     siso_rows = _parse_speed_sheet(SHEET_NAMES["siso"])
     mimo_rows = _parse_speed_sheet(SHEET_NAMES["mimo"])
 
-    # --- Physical Thresholds Lookup (optional) ---
+    # --- Physical Thresholds Lookup ---
     physical = []
     phys_sheet = "Physical Thresholds Lookup"
+    if phys_sheet not in wb.sheetnames:
+        logger.warning("Sheet '%s' not found in %s — physical thresholds will be empty", phys_sheet, excel_path.name)
     if phys_sheet in wb.sheetnames:
         ws_phys = wb[phys_sheet]
         phys_rows = list(ws_phys.iter_rows(values_only=True))
@@ -144,6 +149,8 @@ def load_threshold_excel(excel_path: str | Path) -> dict:
                 "unit": row[5],
                 "equipment": row[6],
             })
+
+    logger.info("Loaded %d physical threshold rules", len(physical))
 
     wb.close()
 
