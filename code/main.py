@@ -38,6 +38,19 @@ from .utils.file_utils import discover_screenshots, pair_screenshots
 
 logger = logging.getLogger(__name__)
 
+# Map VLM/parser connection modes to threshold engine format
+_CONN_MODE_MAP = {
+    "LTE_ONLY": "LTE Only",
+    "NR_SA": "NR SA",
+    "ENDC": "EN-DC",
+    "NRDC": "NR-DC",
+    # Pass-through for already-normalized values
+    "LTE Only": "LTE Only",
+    "NR SA": "NR SA",
+    "EN-DC": "EN-DC",
+    "NR-DC": "NR-DC",
+}
+
 
 class DASValidator:
     """Pipeline orchestrator for DAS site RF validation."""
@@ -162,7 +175,7 @@ class DASValidator:
             )
 
             # Speed test check — 5-dimensional lookup
-            conn_mode = sm.get("connection_mode", "LTE Only")
+            conn_mode = _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only")
 
             # Determine BW components for lookup
             bw_lte = int(result.get("bandwidth_mhz", 0)) if lte else 0
@@ -204,7 +217,7 @@ class DASValidator:
             cell_data = {
                 "service_mode": result.get("service_mode", {}),
                 "speedtest": result.get("speedtest", {}),
-                "connection_mode": result.get("service_mode", {}).get("connection_mode", "LTE Only"),
+                "connection_mode": _CONN_MODE_MAP.get(result.get("service_mode", {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
                 "bandwidth_mhz": result.get("bandwidth_mhz", 0),
                 "mimo_config": result.get("mimo_config", "SISO"),
                 "sector": result.get("sector"),
@@ -243,7 +256,7 @@ class DASValidator:
             row = {
                 "bts": site_id,
                 "tech_sector": result.get("tech_subfolder", ""),
-                "connection_mode": sm.get("connection_mode", "LTE Only"),
+                "connection_mode": _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only"),
                 "bandwidth": result.get("bandwidth_mhz", ""),
                 "pci": lte.get("pci") or nr.get("nr_pci") or "",
                 "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm") or "",
