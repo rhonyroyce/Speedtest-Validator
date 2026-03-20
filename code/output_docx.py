@@ -67,7 +67,7 @@ class OutputDocxGenerator:
     def generate(
         self,
         results: list[dict],
-        site_config: list[dict],
+        site_config: dict | list[dict],
         analysis_data: dict,
         output_path: str | Path,
     ) -> Path:
