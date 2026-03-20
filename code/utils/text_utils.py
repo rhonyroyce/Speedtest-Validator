@@ -7,7 +7,7 @@ Handles the messy reality of LLM-generated text:
 - Extract JSON from mixed text output
 - Normalize whitespace
 
-Implementation: Claude Code Prompt 3 (Screenshot Parser) — shared utility
+Implementation: Claude Code Prompt 2 (Ollama Client) — shared utility
 """
 import re
 import json
@@ -18,9 +18,7 @@ def strip_thinking_tags(text: str) -> str:
 
     qwen3-vl:8b frequently wraps reasoning in think tags before JSON output.
     """
-    # TODO: Implement regex to strip <think>...</think> (including multiline)
-    # Pattern: <think>.*?</think> with re.DOTALL flag
-    raise NotImplementedError("Implement in Claude Code Prompt 3")
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 def strip_markdown_fences(text: str) -> str:
@@ -28,8 +26,8 @@ def strip_markdown_fences(text: str) -> str:
 
     LLMs often wrap JSON in code blocks even when instructed not to.
     """
-    # TODO: Implement regex to strip ```json\n...\n``` and ```\n...\n```
-    raise NotImplementedError("Implement in Claude Code Prompt 3")
+    # Match ```json\n...\n``` or ```\n...\n``` (with optional language tag)
+    return re.sub(r"```(?:\w+)?\s*\n?(.*?)\n?\s*```", r"\1", text, flags=re.DOTALL).strip()
 
 
 def clean_unicode(text: str) -> str:
@@ -38,11 +36,15 @@ def clean_unicode(text: str) -> str:
     Common issues: BOM (\\ufeff), zero-width spaces (\\u200b),
     smart quotes (\u2018\u2019\u201c\u201d → ''\"\"), non-breaking spaces.
     """
-    # TODO: Implement Unicode cleanup
-    # - Remove BOM, zero-width chars
-    # - Replace smart quotes with ASCII equivalents
-    # - Normalize whitespace (NBSP → space)
-    raise NotImplementedError("Implement in Claude Code Prompt 3")
+    # Remove BOM and zero-width characters
+    text = text.replace("\ufeff", "")
+    text = re.sub(r"[\u200b\u200c\u200d\u2060\ufffe]", "", text)
+    # Replace smart quotes with ASCII
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    # Non-breaking space → regular space
+    text = text.replace("\u00a0", " ")
+    return text
 
 
 def extract_json(text: str) -> dict | list | None:
@@ -57,20 +59,32 @@ def extract_json(text: str) -> dict | list | None:
     Returns:
         Parsed JSON object/array, or None if no valid JSON found
     """
-    # TODO: Implement extraction pipeline
-    # 1. strip_thinking_tags()
-    # 2. strip_markdown_fences()
-    # 3. clean_unicode()
-    # 4. Try json.loads() on cleaned text
-    # 5. If fails, find first {/[ and last }/] and try parsing that substring
-    # 6. Return parsed object or None
-    raise NotImplementedError("Implement in Claude Code Prompt 3")
+    cleaned = strip_thinking_tags(text)
+    cleaned = strip_markdown_fences(cleaned)
+    cleaned = clean_unicode(cleaned)
+
+    # Try direct parse
+    try:
+        return json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Fallback: find first {/[ to last }/]
+    for open_char, close_char in [("{", "}"), ("[", "]")]:
+        start = cleaned.find(open_char)
+        end = cleaned.rfind(close_char)
+        if start != -1 and end > start:
+            try:
+                return json.loads(cleaned[start : end + 1])
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+    return None
 
 
 def normalize_whitespace(text: str) -> str:
     """Collapse multiple whitespace characters into single spaces, strip edges."""
-    # TODO: Implement
-    raise NotImplementedError("Implement in Claude Code Prompt 3")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def truncate_for_cell(text: str, max_chars: int = 32767) -> str:
