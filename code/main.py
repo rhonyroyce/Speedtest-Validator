@@ -186,7 +186,19 @@ class DASValidator:
             ciq = result.get("ciq", {})
             if ciq.get("radioType") in ("NR", "nr"):
                 bw_nr_c1 = int(result.get("bandwidth_mhz", 0))
-                bw_lte = 0
+                if conn_mode in ("EN-DC",):
+                    # EN-DC needs both LTE and NR BW — look up LTE from CIQ
+                    lte_earfcn = lte.get("earfcn")
+                    if lte_earfcn:
+                        lte_match = self.ciq_reader.match_cell(earfcn=int(lte_earfcn))
+                        if lte_match:
+                            bw_lte = int(self.ciq_reader.get_bandwidth_mhz(lte_match))
+                        else:
+                            bw_lte = 0
+                    else:
+                        bw_lte = 0
+                else:
+                    bw_lte = 0
 
             st_result = self.threshold_engine.check_speed_test(
                 dl_mbps=float(st.get("dl_throughput_mbps") or 0),
