@@ -119,12 +119,31 @@ class ScreenshotParser:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _encode_image(image_path: str | Path) -> str:
-        """Read an image file and return its base64-encoded string."""
+    def _encode_image(image_path: str | Path, max_dimension: int = 1024) -> str:
+        """Read image, resize to max_dimension, return base64-encoded JPEG string."""
+        from PIL import Image
+        import io
+
         path = Path(image_path)
         if not path.is_file():
             raise FileNotFoundError(f"Image not found: {path}")
-        return base64.b64encode(path.read_bytes()).decode("utf-8")
+
+        img = Image.open(path)
+
+        # Resize if larger than max_dimension on either side
+        if max(img.size) > max_dimension:
+            img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+
+        # Convert to RGB if needed (handles RGBA, palette images)
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+
+        # Encode to JPEG bytes in memory
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        buffer.seek(0)
+
+        return base64.b64encode(buffer.read()).decode("utf-8")
 
     # ------------------------------------------------------------------
     # VLM extraction
