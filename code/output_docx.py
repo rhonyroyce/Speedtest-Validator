@@ -283,7 +283,7 @@ class OutputDocxGenerator:
         # Group results by sector
         by_sector = defaultdict(list)
         for r in results:
-            sector = r.get("tech_sector", "Unknown")
+            sector = r.get("tech_sector") or "Unknown"
             by_sector[sector].append(r)
 
         for sector, sector_results in sorted(by_sector.items()):

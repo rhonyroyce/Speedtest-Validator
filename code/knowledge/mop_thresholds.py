@@ -167,23 +167,56 @@ def find_threshold_row(
     bw_lte_mhz: int,
     bw_nr_c1_mhz: int,
     bw_nr_c2_mhz: int,
+    conn_mode: str = "",
 ) -> dict | None:
     """Find the matching threshold row for a BW combination.
+
+    The threshold table rows always have both BW_LTE and BW_NR_C1 populated
+    (designed for EN-DC). For LTE-only or NR SA modes, the matching falls
+    back to the relevant column(s) only.
 
     Args:
         rows: List of row dicts from SISO or MIMO sheet
         bw_lte_mhz: LTE bandwidth in MHz
         bw_nr_c1_mhz: NR C1 bandwidth in MHz (0 if not present)
         bw_nr_c2_mhz: NR C2 bandwidth in MHz (0 if not present)
+        conn_mode: "LTE Only", "NR SA", "EN-DC", or "NR-DC" for fallback
 
     Returns:
         Matching row dict, or None if no match found
     """
+    # 1. Try exact 3-column match first
     for row in rows:
         if (row.get("bw_lte") == bw_lte_mhz
                 and row.get("bw_nr_c1") == bw_nr_c1_mhz
                 and row.get("bw_nr_c2") == bw_nr_c2_mhz):
             return row
+
+    # 2. Connection-mode-aware fallback when exact match fails
+    if conn_mode == "LTE Only" and bw_lte_mhz > 0:
+        # Match on LTE BW only — NR columns irrelevant for LTE-only
+        for row in rows:
+            if row.get("bw_lte") == bw_lte_mhz and row.get("bw_nr_c2", 0) == 0:
+                return row
+    elif conn_mode == "NR SA" and bw_nr_c1_mhz > 0:
+        # Match on NR C1 BW only — LTE column irrelevant for NR SA
+        for row in rows:
+            if row.get("bw_nr_c1") == bw_nr_c1_mhz and row.get("bw_nr_c2", 0) == 0:
+                return row
+    elif conn_mode == "EN-DC" and bw_lte_mhz > 0 and bw_nr_c1_mhz > 0:
+        # Match on both LTE + NR C1, ignore C2
+        for row in rows:
+            if (row.get("bw_lte") == bw_lte_mhz
+                    and row.get("bw_nr_c1") == bw_nr_c1_mhz
+                    and row.get("bw_nr_c2", 0) == 0):
+                return row
+    elif conn_mode == "NR-DC" and bw_nr_c1_mhz > 0 and bw_nr_c2_mhz > 0:
+        # Match on NR C1 + NR C2
+        for row in rows:
+            if (row.get("bw_nr_c1") == bw_nr_c1_mhz
+                    and row.get("bw_nr_c2") == bw_nr_c2_mhz):
+                return row
+
     return None
 
 

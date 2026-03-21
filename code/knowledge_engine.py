@@ -113,7 +113,7 @@ class KnowledgeEngine:
             logger.warning("No rows for config: %s", mimo_config)
             return None
 
-        row = mop_thresholds.find_threshold_row(rows, bw_lte, bw_nr_c1, bw_nr_c2)
+        row = mop_thresholds.find_threshold_row(rows, bw_lte, bw_nr_c1, bw_nr_c2, conn_mode)
         if row is None:
             logger.warning(
                 "No threshold row for %s: LTE=%d, NR_C1=%d, NR_C2=%d",

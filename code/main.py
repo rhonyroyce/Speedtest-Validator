@@ -185,7 +185,8 @@ class DASValidator:
 
             # If we have CIQ data for NR bandwidth, prefer that
             ciq = result.get("ciq", {})
-            if ciq.get("radioType") in ("NR", "nr"):
+            is_nr_cell = "gUtranCell" in ciq or str(ciq.get("radioType", "")).upper().startswith("NR")
+            if is_nr_cell:
                 bw_nr_c1 = int(result.get("bandwidth_mhz", 0))
                 if conn_mode in ("EN-DC",):
                     # EN-DC needs both LTE and NR BW — look up LTE from CIQ
@@ -217,6 +218,11 @@ class DASValidator:
             result["threshold_st"] = st_result
             result["comment"] = comment
 
+            # Preserve decomposed BW for Phase 5 analysis context
+            result["bw_lte_mhz"] = bw_lte
+            result["bw_nr_c1_mhz"] = bw_nr_c1
+            result["bw_nr_c2_mhz"] = bw_nr_c2
+
         # ── Phase 5: Knowledge Analysis (gpt-oss:20b) ──────────────
         logger.info("Phase 5: Knowledge Analysis")
         analysis_model = self.config["ollama"]["analysis_model"]
@@ -232,7 +238,11 @@ class DASValidator:
                 "speedtest": result.get("speedtest") or {},
                 "connection_mode": _CONN_MODE_MAP.get((result.get("service_mode") or {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
                 "bandwidth_mhz": result.get("bandwidth_mhz", 0),
+                "bw_lte_mhz": result.get("bw_lte_mhz", 0),
+                "bw_nr_c1_mhz": result.get("bw_nr_c1_mhz", 0),
+                "bw_nr_c2_mhz": result.get("bw_nr_c2_mhz", 0),
                 "mimo_config": result.get("mimo_config", "SISO"),
+                "conn_mode": _CONN_MODE_MAP.get((result.get("service_mode") or {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
                 "sector": result.get("sector"),
                 "tech_subfolder": result.get("tech_subfolder"),
             }
