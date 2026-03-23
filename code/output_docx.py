@@ -47,7 +47,7 @@ GLOSSARY = {
     "BW": "Bandwidth — width of the radio frequency channel (MHz).",
     "RRU": "Remote Radio Unit — radio equipment installed near the antenna.",
     "VSWR": "Voltage Standing Wave Ratio — measure of impedance matching in antenna system.",
-    "AILG": "Automatic Idle-mode Load Guard — feature that adjusts RSSI targets.",
+    "AILG": "Air Interface Load Generator — Ericsson tool that generates controlled load on the air interface for testing and optimization.",
     "KPI": "Key Performance Indicator — measurable metric for network performance.",
 }
 
