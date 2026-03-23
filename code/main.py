@@ -202,6 +202,13 @@ class DASValidator:
                 else:
                     bw_lte = 0
 
+            # Infer connection mode from BW data when VLM defaults to LTE Only
+            if conn_mode == "LTE Only":
+                if bw_lte > 0 and bw_nr_c1 > 0:
+                    conn_mode = "EN-DC"
+                elif bw_lte == 0 and bw_nr_c1 > 0:
+                    conn_mode = "NR SA"
+
             st_result = self.threshold_engine.check_speed_test(
                 dl_mbps=float(st.get("dl_throughput_mbps") or 0),
                 ul_mbps=float(st.get("ul_throughput_mbps") or 0),
@@ -218,10 +225,11 @@ class DASValidator:
             result["threshold_st"] = st_result
             result["comment"] = comment
 
-            # Preserve decomposed BW for Phase 5 analysis context
+            # Preserve decomposed BW and inferred conn_mode for Phase 5/6
             result["bw_lte_mhz"] = bw_lte
             result["bw_nr_c1_mhz"] = bw_nr_c1
             result["bw_nr_c2_mhz"] = bw_nr_c2
+            result["inferred_conn_mode"] = conn_mode
 
         # ── Phase 5: Knowledge Analysis (gpt-oss:20b) ──────────────
         logger.info("Phase 5: Knowledge Analysis")
@@ -233,16 +241,17 @@ class DASValidator:
             cell_id = result.get("cell_id", f"cell_{i}")
             logger.info("Analyzing cell %d/%d: %s", i + 1, len(extraction_results), cell_id)
 
+            inferred_mode = result.get("inferred_conn_mode", "LTE Only")
             cell_data = {
                 "service_mode": result.get("service_mode") or {},
                 "speedtest": result.get("speedtest") or {},
-                "connection_mode": _CONN_MODE_MAP.get((result.get("service_mode") or {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
+                "connection_mode": inferred_mode,
                 "bandwidth_mhz": result.get("bandwidth_mhz", 0),
                 "bw_lte_mhz": result.get("bw_lte_mhz", 0),
                 "bw_nr_c1_mhz": result.get("bw_nr_c1_mhz", 0),
                 "bw_nr_c2_mhz": result.get("bw_nr_c2_mhz", 0),
                 "mimo_config": result.get("mimo_config", "SISO"),
-                "conn_mode": _CONN_MODE_MAP.get((result.get("service_mode") or {}).get("connection_mode", "LTE_ONLY"), "LTE Only"),
+                "conn_mode": inferred_mode,
                 "sector": result.get("sector"),
                 "tech_subfolder": result.get("tech_subfolder"),
             }
@@ -279,7 +288,7 @@ class DASValidator:
             row = {
                 "bts": site_id,
                 "tech_sector": result.get("tech_subfolder", ""),
-                "connection_mode": _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only"),
+                "connection_mode": result.get("inferred_conn_mode", _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only")),
                 "bandwidth": result.get("bandwidth_mhz", ""),
                 "pci": lte.get("pci") or nr.get("nr_pci") or "",
                 "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm") or "",

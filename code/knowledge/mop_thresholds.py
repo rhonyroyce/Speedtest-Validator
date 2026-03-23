@@ -210,6 +210,11 @@ def find_threshold_row(
                     and row.get("bw_nr_c1") == bw_nr_c1_mhz
                     and row.get("bw_nr_c2", 0) == 0):
                 return row
+        # Relax LTE BW: find closest LTE BW row for the same NR C1
+        nr_matches = [r for r in rows
+                      if r.get("bw_nr_c1") == bw_nr_c1_mhz and r.get("bw_nr_c2", 0) == 0]
+        if nr_matches:
+            return min(nr_matches, key=lambda r: abs(r.get("bw_lte", 0) - bw_lte_mhz))
     elif conn_mode == "NR-DC" and bw_nr_c1_mhz > 0 and bw_nr_c2_mhz > 0:
         # Match on NR C1 + NR C2
         for row in rows:
