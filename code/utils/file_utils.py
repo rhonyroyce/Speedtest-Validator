@@ -207,7 +207,9 @@ def pair_screenshots(screenshots: list[dict], max_gap_seconds: int = 240) -> lis
             if best_st is not None and best_gap <= max_gap_seconds:
                 idx, st = best_st
                 used_st.add(idx)
-                duration = (st["parsed"]["datetime"] - sm_dt).total_seconds()
+                duration = abs((st["parsed"]["datetime"] - sm_dt).total_seconds())
+                if (st["parsed"]["datetime"] - sm_dt).total_seconds() < 0:
+                    logger.debug("Negative SM-ST duration for %s — screenshots may be in reverse order", sm["parsed"]["cell_id"])
                 pairs.append({
                     "service_mode": sm,
                     "speedtest": st,

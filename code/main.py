@@ -318,11 +318,19 @@ class DASValidator:
             lte = sm.get("lte_params") or {}
             nr = sm.get("nr_params") or {}
 
+            bw_lte = result.get("bw_lte_mhz", 0)
+            bw_nr_c1 = result.get("bw_nr_c1_mhz", 0)
+            bw_nr_c2 = result.get("bw_nr_c2_mhz", 0)
+            if bw_nr_c1 or bw_nr_c2:
+                bandwidth = f"LTE {bw_lte} / NR C1 {bw_nr_c1} / NR C2 {bw_nr_c2}"
+            else:
+                bandwidth = f"LTE {bw_lte}"
+
             row = {
                 "bts": site_id,
-                "tech_sector": result.get("tech_subfolder", ""),
+                "tech_sector": f"SECTOR {result.get('sector', '?')} / {result.get('tech_subfolder') or result.get('tech_info', {}).get('band', 'Unknown')}",
                 "connection_mode": result.get("inferred_conn_mode", _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only")),
-                "bandwidth": result.get("bandwidth_mhz", ""),
+                "bandwidth": bandwidth,
                 "pci": lte.get("pci") or nr.get("nr_pci") or "",
                 "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm") or "",
                 "rsrq": lte.get("rsrq_db") or nr.get("nr5g_rsrq_db") or "",
