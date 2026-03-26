@@ -24,6 +24,7 @@ class ThresholdEngine:
         self.service_mode = None
         self.siso = None
         self.mimo = None
+        self.physical = None
 
     def load_thresholds(self) -> None:
         """Load threshold data from knowledge engine.
@@ -39,11 +40,13 @@ class ThresholdEngine:
         self.service_mode = thresholds.get("service_mode", {})
         self.siso = thresholds.get("siso", [])
         self.mimo = thresholds.get("mimo", [])
+        self.physical = thresholds.get("physical", [])
 
         logger.info(
-            "ThresholdEngine loaded: %d SISO rows, %d MIMO rows",
+            "ThresholdEngine loaded: %d SISO rows, %d MIMO rows, %d physical rules",
             len(self.siso),
             len(self.mimo),
+            len(self.physical),
         )
 
     def check_service_mode(
@@ -317,6 +320,65 @@ class ThresholdEngine:
             "failed_params": failed_params,
             "comment": comment,
         }
+
+    def check_physical_layer(
+        self,
+        parameter: str,
+        value: float,
+        band: str = "",
+        equipment: str = "",
+    ) -> dict:
+        """Check physical layer parameter against thresholds.
+
+        Composite key: (parameter, band, equipment) — case-insensitive matching.
+
+        Args:
+            parameter: Parameter name (e.g. "RSSI Hot", "VSWR", "Fiber Loss")
+            value: Measured value
+            band: Band/frequency (e.g. "PCS", "N2500") — partial match
+            equipment: Equipment type (e.g. "RRU 4402", "RRU 8863") — partial match
+
+        Returns:
+            Dict with parameter, value, min_value, max_value, pass_fail, delta.
+        """
+        rules = self.physical or []
+        matching = [
+            r for r in rules
+            if r["parameter"].lower() == parameter.lower()
+            and (not band or band.lower() in r.get("band", "").lower())
+            and (not equipment or equipment.lower() in r.get("equipment", "").lower())
+        ]
+
+        if not matching:
+            return {
+                "parameter": parameter,
+                "value": value,
+                "min_value": None,
+                "max_value": None,
+                "pass_fail": "NO_RULE",
+                "delta": 0,
+            }
+
+        # Check against each matching rule
+        for rule in matching:
+            min_val = rule.get("min_value")
+            max_val = rule.get("max_value")
+            if min_val is not None and value < min_val:
+                return {
+                    **rule,
+                    "value": value,
+                    "pass_fail": "FAIL",
+                    "delta": round(value - min_val, 2),
+                }
+            if max_val is not None and value > max_val:
+                return {
+                    **rule,
+                    "value": value,
+                    "pass_fail": "FAIL",
+                    "delta": round(value - max_val, 2),
+                }
+
+        return {**matching[0], "value": value, "pass_fail": "PASS", "delta": 0}
 
     # --- Private helpers ---
 

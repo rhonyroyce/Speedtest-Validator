@@ -155,6 +155,12 @@ class OutputXlsxGenerator:
         ws_thresh = wb.create_sheet("Thresholds Reference")
         self._create_threshold_tab(ws_thresh, threshold_data)
 
+        # Tab 3 — Physical Layer (only if any result has physical_results)
+        physical_rows = [r.get("physical_results") for r in results if r.get("physical_results")]
+        if physical_rows:
+            ws_phys = wb.create_sheet("Physical Layer")
+            self._create_physical_layer_tab(ws_phys, results)
+
         wb.save(str(output_path))
         logger.info("Output XLSX written to %s (%d rows)", output_path, len(results))
         return output_path
@@ -421,6 +427,69 @@ class OutputXlsxGenerator:
         for col_idx, col_name in enumerate(self._active_columns, start=1):
             col_letter = get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = COLUMN_WIDTHS.get(col_name, 14)
+
+    # ------------------------------------------------------------------
+    # Tab 3: Physical Layer
+    # ------------------------------------------------------------------
+
+    def _create_physical_layer_tab(
+        self, ws: Worksheet, results: list[dict],
+    ) -> None:
+        """Write Physical Layer check results for cells that have them."""
+        headers = [
+            "BTS", "Tech/Sector", "Parameter", "Value",
+            "Min", "Max", "Unit", "Band", "Equipment",
+            "Pass/Fail", "Delta",
+        ]
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = THIN_BORDER
+
+        row_num = 2
+        for result in results:
+            phys = result.get("physical_results")
+            if not phys:
+                continue
+            bts = result.get("bts", "")
+            tech_sector = result.get("tech_sector", "")
+            for pr in phys:
+                values = [
+                    bts,
+                    tech_sector,
+                    pr.get("parameter", ""),
+                    pr.get("value"),
+                    pr.get("min_value"),
+                    pr.get("max_value"),
+                    pr.get("unit", ""),
+                    pr.get("band", ""),
+                    pr.get("equipment", ""),
+                    pr.get("pass_fail", ""),
+                    pr.get("delta"),
+                ]
+                for col_idx, val in enumerate(values, start=1):
+                    cell = ws.cell(row=row_num, column=col_idx, value=val)
+                    cell.border = THIN_BORDER
+                    if isinstance(val, (int, float)):
+                        cell.number_format = "0.00"
+
+                # Color the Pass/Fail column
+                pf_cell = ws.cell(row=row_num, column=10)
+                if pr.get("pass_fail") == "PASS":
+                    pf_cell.fill = PASS_FILL
+                elif pr.get("pass_fail") == "FAIL":
+                    pf_cell.fill = FAIL_FILL
+
+                row_num += 1
+
+        # Column widths
+        widths = [14, 18, 18, 10, 10, 10, 8, 14, 16, 10, 10]
+        for col_idx, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = w
+
+        ws.freeze_panes = "A2"
 
     # ------------------------------------------------------------------
     # Color helpers

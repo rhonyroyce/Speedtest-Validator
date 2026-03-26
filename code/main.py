@@ -248,6 +248,17 @@ class DASValidator:
             result["threshold_st"] = st_result
             result["comment"] = comment
 
+            # Physical layer checks (if measurements present)
+            if result.get("physical_measurements"):
+                physical_results = []
+                for param, value in result["physical_measurements"].items():
+                    physical_results.append(
+                        self.threshold_engine.check_physical_layer(
+                            param, value, band=result.get("band", ""),
+                        )
+                    )
+                result["physical_results"] = physical_results
+
             # Preserve decomposed BW and inferred conn_mode for Phase 5/6
             result["bw_lte_mhz"] = bw_lte
             result["bw_nr_c1_mhz"] = bw_nr_c1
