@@ -1,8 +1,8 @@
 """DAS Speed Test Validator — CLI entry point and pipeline orchestrator.
 
 Processes a DAS site folder of Samsung Service Mode and Speedtest screenshots,
-extracts RF parameters via qwen3-vl:8b, correlates with CIQ, checks thresholds,
-generates analysis via gpt-oss:20b, and produces Output.xlsx + RF_Throughput_Analysis.docx.
+extracts RF parameters via VLM (see config.yaml), correlates with CIQ, checks thresholds,
+generates analysis via LLM (see config.yaml), and produces Output.xlsx + RF_Throughput_Analysis.docx.
 
 Usage:
     # Full site processing
@@ -82,11 +82,25 @@ class DASValidator:
         output_dir: str,
         dry_run: bool = False,
     ) -> None:
-        """Execute the 6-phase DAS validation pipeline."""
+        """Execute the 7-phase DAS validation pipeline (Phase 0–6)."""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
         site_id = Path(site_folder).name
+
+        # ── Phase 0: Pre-flight Check ─────────────────────────────
+        logger.info("Phase 0: Pre-flight Check")
+        if not self.ollama.health_check():
+            raise ConnectionError(f"Ollama not reachable at {self.ollama.base_url}")
+        missing = self.ollama.validate_models_available()
+        if missing:
+            raise RuntimeError(
+                f"Missing Ollama models: {missing}. "
+                f"Pull with: ollama pull {'&&ollama pull '.join(missing)}"
+            )
+        if not Path(ciq_path).is_file():
+            raise FileNotFoundError(f"CIQ file not found: {ciq_path}")
+        logger.info("Pre-flight check passed")
 
         # ── Phase 1: Screenshot Discovery ──────────────────────────
         logger.info("Phase 1: Screenshot Discovery")

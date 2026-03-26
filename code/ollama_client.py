@@ -1,6 +1,7 @@
 """Ollama API client — vision + text model support with VRAM-aware model switching.
 
-CRITICAL: 16GB VRAM constraint. Cannot run qwen2.5-vl:7b and gpt-oss:20b simultaneously.
+CRITICAL: 16GB VRAM constraint. Cannot run both models simultaneously.
+Model names are configured in config.yaml — do not hardcode here.
 Must unload one model before loading the other via keep_alive: 0.
 
 Implementation: Claude Code Prompt 2 (Ollama Client)
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
-    """Unified Ollama API client for vision (qwen2.5-vl:7b) and text (gpt-oss:20b) models."""
+    """Unified Ollama API client for vision and text models (see config.yaml)."""
 
     def __init__(self, config: dict):
         ollama_cfg = config.get("ollama", {})
@@ -66,12 +67,30 @@ class OllamaClient:
     # ------------------------------------------------------------------
 
     def health_check(self) -> bool:
-        """Verify Ollama is running via GET /api/tags."""
+        """Verify Ollama is running via GET /api/ps. Returns True if HTTP 200."""
         try:
-            self._request("GET", "/api/tags", timeout=10)
+            self._request("GET", "/api/ps", timeout=10)
             return True
         except Exception:
             return False
+
+    def validate_models_available(self) -> list[str]:
+        """Check that vision and analysis models are pulled locally.
+
+        Queries GET /api/tags and compares against self.vision_model and
+        self.analysis_model. Returns list of model names that are missing.
+        """
+        try:
+            resp = self._request("GET", "/api/tags", timeout=10)
+        except Exception:
+            return [self.vision_model, self.analysis_model]
+
+        available = {m["name"] for m in resp.get("models", [])}
+        missing = []
+        for required in (self.vision_model, self.analysis_model):
+            if required not in available:
+                missing.append(required)
+        return missing
 
     def get_loaded_models(self) -> list[str]:
         """Return list of currently loaded model names via GET /api/ps."""

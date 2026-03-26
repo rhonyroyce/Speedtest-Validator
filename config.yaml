@@ -1,9 +1,10 @@
 # DAS Speed Test Validator — Configuration
 # All paths, model names, and thresholds live here. Never hardcode.
+# Canonical model names — update here and nowhere else
 
 ollama:
   base_url: "http://localhost:11434"
-  vision_model: "qwen2.5vl:7b"         # ~5GB VRAM — screenshot OCR/extraction
+  vision_model: "qwen3-vl:8b"         # ~5GB VRAM — screenshot OCR/extraction
   analysis_model: "gpt-oss:20b"       # ~12GB VRAM — observations, recommendations, KPI impact
   vram_gb: 16                          # Total GPU VRAM — cannot run both models simultaneously
   unload_before_switch: true           # MUST unload one model before loading the other
@@ -19,9 +20,19 @@ paths:
   rag_docx: "./input/RF_Throughput_Analysis_Universal_RAG.docx"
   kpi_excel: "./input/MS2_KPI_and_Counters.xlsx"
   mop_pdf: "./input/DAS_Validation_MOP_2.pdf"
+  causal_dag: "./code/knowledge/causal_dag.json"
   # I/O directories
   output_dir: "./outputs"
   sample_dir: "./data/sample"
+
+# Causal DAG — 5-tier knowledge graph for root cause analysis
+# Source: Causal_DAG_Knowledge_Graph_v3.json (123 nodes, 159 edges, 20 playbooks)
+causal_dag:
+  path: "./code/knowledge/causal_dag.json"
+  enable_backward_traversal: true    # Symptom → root cause chain traversal
+  max_chain_depth: 5                 # Max hops in causal chain traversal
+  deduplicate_kpi_impacts: true      # Collapse correlated KPI flags to single root cause
+  borderline_threshold_pct: 10       # Flag cells within ±10% of threshold as at-risk
 
 # Service Mode pass/fail thresholds (simple — same for all techs)
 # These are for Antenna End (under DAS antennas) testing

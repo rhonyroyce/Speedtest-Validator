@@ -1,12 +1,12 @@
 # Speedtest-Validator — Project Memory
 
 ## Overview
-Python CLI automating T-Mobile DAS site RF validation by processing Samsung Service Mode and Speedtest screenshots using qwen3-vl:8b (Ollama vision-language model). NVIDIA AI Workbench-compatible project.
+Python CLI automating T-Mobile DAS site RF validation by processing Samsung Service Mode and Speedtest screenshots using Ollama vision-language models (see config.yaml). NVIDIA AI Workbench-compatible project.
 
 ## Tech Stack
 - **Runtime**: Python 3.10+
-- **Vision LLM**: Ollama qwen3-vl:8b (~5GB VRAM) — screenshot OCR/extraction
-- **Analysis LLM**: Ollama gpt-oss:20b (~12GB VRAM) — observations, recommendations, KPI impact
+- **Vision LLM**: see config.yaml `ollama.vision_model` (~5GB VRAM) — screenshot OCR/extraction
+- **Analysis LLM**: see config.yaml `ollama.analysis_model` (~12GB VRAM) — observations, recommendations, KPI impact
 - **GPU**: Single 16GB VRAM — MUST unload one model before loading the other
 - **AI Workbench**: `.project/spec.yaml` v2 — ml-gpu environment (PyTorch base, CUDA 12.2, 1 GPU)
 - **Acceleration**: RAPIDS cuDF/cuML optional (auto-detected via `code/utils/gpu_utils.py`)
@@ -14,10 +14,10 @@ Python CLI automating T-Mobile DAS site RF validation by processing Samsung Serv
 - **Image**: Pillow (preprocessing), base64 (Ollama API encoding)
 
 ## GPU / Model Management (CRITICAL)
-- Total VRAM: 16 GB — cannot run qwen3-vl:8b and gpt-oss:20b simultaneously
+- Total VRAM: 16 GB — cannot run both models simultaneously (see config.yaml for model names)
 - Pipeline phases:
-  1. **Extraction phase**: Load qwen3-vl:8b, process ALL screenshots, unload
-  2. **Analysis phase**: Load gpt-oss:20b, generate ALL observations/recommendations/KPI impact, unload
+  1. **Extraction phase**: Load vision model, process ALL screenshots, unload
+  2. **Analysis phase**: Load analysis model, generate ALL observations/recommendations/KPI impact, unload
 - Unload via: `POST http://localhost:11434/api/generate {"model": "model_name", "keep_alive": 0}`
 - Always verify model unloaded before loading next: `GET /api/ps` should show 0 models
 - ollama_client.py must implement `unload_model()` and `ensure_model_loaded()` methods
@@ -27,6 +27,7 @@ Python CLI automating T-Mobile DAS site RF validation by processing Samsung Serv
 - **Pipeline**: Screenshot Discovery → VLM Extraction → CIQ Correlation → Threshold Check → Knowledge Analysis → Output Generation
 - **Core modules**: main.py, ollama_client.py, screenshot_parser.py, ciq_reader.py, threshold_engine.py, knowledge_engine.py, analysis_engine.py, output_xlsx.py, output_docx.py
 - **Knowledge base**: Structured Python dicts (NOT vector DB/RAG) in `code/knowledge/`
+- **Causal DAG**: `code/knowledge/causal_dag.json` — 5-tier knowledge graph (T1 Physical → T2 RF → T3 Parameter → T4 Counter → T5 KPI), 123 nodes, 159 edges, 20 mitigation playbooks. Source: `Causal_DAG_Knowledge_Graph_v3.json`. Config: `causal_dag` section in `config.yaml`.
 - **Prompts**: Markdown templates in `code/prompts/` (separate for Service Mode vs Speedtest)
 
 ## Critical Reference Data
