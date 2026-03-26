@@ -24,6 +24,7 @@ _CONN_MODE_UL_COL = {
     "LTE Only": ("lte_ul_min", "lte_ul_max"),
     "NR SA": ("nr_ul_min", "nr_ul_max"),
     "EN-DC": ("endc_ul_min", "endc_ul_max"),
+    "NR-DC": ("nr_ul_min", "nr_ul_max"),  # Intentionally reuses NR UL — no separate NRDC UL in threshold sheet
 }
 
 

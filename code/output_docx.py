@@ -1,4 +1,7 @@
-"""Output Word document generator — creates RF_Throughput_Analysis.docx.
+"""DEPRECATED — this module is no longer imported by main.py (removed 2026-03-26).
+Retained for reference only. Use output_xlsx.py for all output generation.
+
+Output Word document generator — creates RF_Throughput_Analysis.docx.
 
 Generates a comprehensive RF analysis document with:
 - Title page (site ID, date, analyst)

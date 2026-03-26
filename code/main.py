@@ -30,7 +30,6 @@ from .analysis_engine import AnalysisEngine
 from .ciq_reader import CIQReader
 from .knowledge_engine import KnowledgeEngine
 from .ollama_client import OllamaClient
-from .output_docx import OutputDocxGenerator
 from .output_xlsx import OutputXlsxGenerator
 from .screenshot_parser import ScreenshotParser
 from .threshold_engine import ThresholdEngine
@@ -71,7 +70,6 @@ class DASValidator:
         self.threshold_engine = ThresholdEngine(self.config, self.knowledge_engine)
         self.analysis_engine = AnalysisEngine(self.config, self.ollama, self.knowledge_engine)
         self.output_xlsx = OutputXlsxGenerator(self.config)
-        self.output_docx = OutputDocxGenerator(self.config)
 
         logger.info("DASValidator initialized with config: %s", config_path)
 
@@ -81,8 +79,13 @@ class DASValidator:
         ciq_path: str,
         output_dir: str,
         dry_run: bool = False,
+        mode: str = "fast",
     ) -> None:
-        """Execute the 7-phase DAS validation pipeline (Phase 0–6)."""
+        """Execute the DAS validation pipeline (Phase 0–6).
+
+        Args:
+            mode: "fast" skips Phase 5 (13-col output), "full" runs analysis (16-col output).
+        """
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -252,47 +255,57 @@ class DASValidator:
             result["inferred_conn_mode"] = conn_mode
 
         # ── Phase 5: Knowledge Analysis (gpt-oss:20b) ──────────────
-        logger.info("Phase 5: Knowledge Analysis")
-        analysis_model = self.config["ollama"]["analysis_model"]
-        self.ollama.ensure_model_loaded(analysis_model)
-
         analysis_data = {}
-        for i, result in enumerate(successful):
-            cell_id = result.get("cell_id", f"cell_{i}")
-            logger.info("Analyzing cell %d/%d: %s", i + 1, len(successful), cell_id)
+        if mode == "full":
+            logger.info("Phase 5: Knowledge Analysis")
+            analysis_model = self.config["ollama"]["analysis_model"]
+            self.ollama.ensure_model_loaded(analysis_model)
 
-            inferred_mode = result.get("inferred_conn_mode", "LTE Only")
-            cell_data = {
-                "service_mode": result.get("service_mode") or {},
-                "speedtest": result.get("speedtest") or {},
-                "connection_mode": inferred_mode,
-                "bandwidth_mhz": result.get("bandwidth_mhz", 0),
-                "bw_lte_mhz": result.get("bw_lte_mhz", 0),
-                "bw_nr_c1_mhz": result.get("bw_nr_c1_mhz", 0),
-                "bw_nr_c2_mhz": result.get("bw_nr_c2_mhz", 0),
-                "mimo_config": result.get("mimo_config", "SISO"),
-                "conn_mode": inferred_mode,
-                "sector": result.get("sector"),
-                "tech_subfolder": result.get("tech_subfolder"),
-            }
+            for i, result in enumerate(successful):
+                cell_id = result.get("cell_id", f"cell_{i}")
+                logger.info("Analyzing cell %d/%d: %s", i + 1, len(successful), cell_id)
 
-            analysis = self.analysis_engine.analyze_cell(
-                cell_data=cell_data,
-                ciq_config=result.get("ciq", {}),
-                threshold_result={
-                    "service_mode": result.get("threshold_sm", {}),
-                    "speed_test": result.get("threshold_st", {}),
-                    "comment": result.get("comment", ""),
-                },
-            )
+                sm = result.get("service_mode") or {}
+                st = result.get("speedtest") or {}
+                lte = sm.get("lte_params") or {}
+                nr = sm.get("nr_params") or {}
+                inferred_mode = result.get("inferred_conn_mode", "LTE Only")
+                cell_data = {
+                    "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm"),
+                    "sinr": lte.get("sinr_db") or nr.get("nr5g_sinr_db"),
+                    "rsrq": lte.get("rsrq_db") or nr.get("nr5g_rsrq_db"),
+                    "tx_power": lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm"),
+                    "dl_throughput": st.get("dl_throughput_mbps"),
+                    "ul_throughput": st.get("ul_throughput_mbps"),
+                    "tech": "NR" if nr.get("nr_band") else "LTE",
+                    "conn_mode": inferred_mode,
+                    "bw_lte_mhz": result.get("bw_lte_mhz", 0),
+                    "bw_nr_c1_mhz": result.get("bw_nr_c1_mhz", 0),
+                    "bw_nr_c2_mhz": result.get("bw_nr_c2_mhz", 0),
+                    "mimo_config": result.get("mimo_config", "SISO"),
+                    "sector": result.get("sector"),
+                    "tech_subfolder": result.get("tech_subfolder"),
+                }
 
-            result["observations"] = analysis.get("observations", "")
-            result["recommendations"] = analysis.get("recommendations", "")
-            result["kpi_impact"] = analysis.get("kpi_impact", "")
-            analysis_data[cell_id] = analysis
+                analysis = self.analysis_engine.analyze_cell(
+                    cell_data=cell_data,
+                    ciq_config=result.get("ciq", {}),
+                    threshold_result={
+                        "service_mode": result.get("threshold_sm", {}),
+                        "speed_test": result.get("threshold_st", {}),
+                        "comment": result.get("comment", ""),
+                    },
+                )
 
-        self.ollama.unload_model(analysis_model)
-        logger.info("Analysis model unloaded")
+                result["observations"] = analysis.get("observations", "")
+                result["recommendations"] = analysis.get("recommendations", "")
+                result["kpi_impact"] = analysis.get("kpi_impact", "")
+                analysis_data[cell_id] = analysis
+
+            self.ollama.unload_model(analysis_model)
+            logger.info("Analysis model unloaded")
+        else:
+            logger.info("Phase 5: Skipped (fast mode)")
 
         # ── Phase 6: Output Generation ──────────────────────────────
         logger.info("Phase 6: Output Generation")
@@ -333,17 +346,12 @@ class DASValidator:
         }
 
         xlsx_path = output_path / f"{site_id}_Output.xlsx"
-        self.output_xlsx.generate(output_results, threshold_data, xlsx_path, failed=failed)
-
-        # Site config for docx
-        site_config = self.ciq_reader.get_site_config_summary()
-
-        docx_path = output_path / f"{site_id}_RF_Throughput_Analysis.docx"
-        self.output_docx.generate(output_results, site_config, analysis_data, docx_path)
+        self.output_xlsx.generate(
+            output_results, threshold_data, xlsx_path, failed=failed, mode=mode,
+        )
 
         print(f"\u2705 Output saved to {output_dir}")
-        print(f"   {site_id}_Output.xlsx ({len(output_results)} rows)")
-        print(f"   {site_id}_RF_Throughput_Analysis.docx")
+        print(f"   {site_id}_Output.xlsx ({len(output_results)} rows, mode={mode})")
 
 
 def main() -> None:
@@ -371,6 +379,12 @@ def main() -> None:
         "--config",
         default="config.yaml",
         help="Config file path (default: config.yaml)",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["fast", "full"],
+        default="fast",
+        help="fast: skip LLM analysis (13 cols); full: run analysis model (16 cols) (default: fast)",
     )
     parser.add_argument(
         "--dry-run",
@@ -409,6 +423,7 @@ def main() -> None:
             ciq_path=args.ciq,
             output_dir=args.output_dir,
             dry_run=args.dry_run,
+            mode=args.mode,
         )
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)

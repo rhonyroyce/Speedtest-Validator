@@ -73,6 +73,10 @@ COLUMN_WIDTHS = {
     "Impact on KPIs": 50,
 }
 
+# Fast mode: first 13 columns (BTS through Comment); Full mode: all 16
+FAST_COLUMNS = COLUMNS[:13]
+FULL_COLUMNS = COLUMNS
+
 # Wrap-text columns
 WRAP_COLUMNS = {"Observations", "Recommendations", "Impact on KPIs", "Comment"}
 
@@ -120,6 +124,7 @@ class OutputXlsxGenerator:
         threshold_data: dict,
         output_path: str | Path,
         failed: list[dict] | None = None,
+        mode: str = "fast",
     ) -> Path:
         """Create the complete Output.xlsx workbook.
 
@@ -129,12 +134,15 @@ class OutputXlsxGenerator:
                             with keys: service_mode, siso, mimo, physical.
             output_path: File path for the output workbook.
             failed: List of extraction-failed result dicts (orange-shaded rows).
+            mode: "fast" (13 cols) or "full" (16 cols).
 
         Returns:
             Path to the written file.
         """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._active_columns = FULL_COLUMNS if mode == "full" else FAST_COLUMNS
 
         wb = Workbook()
 
@@ -173,7 +181,7 @@ class OutputXlsxGenerator:
         self._set_column_widths(ws)
 
         # Enable auto-filter on header row
-        last_col = get_column_letter(len(COLUMNS))
+        last_col = get_column_letter(len(self._active_columns))
         total_rows = len(results) + len(failed or [])
         last_row = max(total_rows + 1, 2)
         ws.auto_filter.ref = f"A1:{last_col}{last_row}"
@@ -182,8 +190,8 @@ class OutputXlsxGenerator:
         ws.freeze_panes = "A2"
 
     def _write_header_row(self, ws: Worksheet) -> None:
-        """Write bold, styled header row with all 16 column names."""
-        for col_idx, col_name in enumerate(COLUMNS, start=1):
+        """Write bold, styled header row using active column set."""
+        for col_idx, col_name in enumerate(self._active_columns, start=1):
             cell = ws.cell(row=1, column=col_idx, value=col_name)
             cell.font = HEADER_FONT
             cell.fill = HEADER_FILL
@@ -193,7 +201,7 @@ class OutputXlsxGenerator:
     def _write_data_row(self, ws: Worksheet, row_num: int, cell_result: dict) -> None:
         """Write one row of validation results and apply conditional formatting."""
         # Extract values from the result dict
-        values = [
+        all_values = [
             cell_result.get("bts", self.site_name),
             cell_result.get("tech_sector", ""),
             cell_result.get("connection_mode", ""),
@@ -211,11 +219,12 @@ class OutputXlsxGenerator:
             truncate_for_cell(cell_result.get("recommendations", "")),
             truncate_for_cell(cell_result.get("kpi_impact", "")),
         ]
+        values = all_values[: len(self._active_columns)]
 
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=row_num, column=col_idx, value=value)
             cell.border = THIN_BORDER
-            col_name = COLUMNS[col_idx - 1]
+            col_name = self._active_columns[col_idx - 1]
 
             # Wrap text for long-content columns
             if col_name in WRAP_COLUMNS:
@@ -267,7 +276,7 @@ class OutputXlsxGenerator:
 
     def _write_failed_row(self, ws: Worksheet, row_num: int, fail_result: dict) -> None:
         """Write an orange-shaded row for a failed extraction."""
-        values = [
+        all_values = [
             fail_result.get("cell_id", ""),
             fail_result.get("tech_subfolder", ""),
             "",  # connection_mode
@@ -277,11 +286,12 @@ class OutputXlsxGenerator:
             f"EXTRACTION_FAILED: {fail_result.get('error', 'unknown')}",
             "", "", "",
         ]
+        values = all_values[: len(self._active_columns)]
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=row_num, column=col_idx, value=value)
             cell.border = THIN_BORDER
             cell.fill = EXTRACTION_FAILED_FILL
-            col_name = COLUMNS[col_idx - 1]
+            col_name = self._active_columns[col_idx - 1]
             if col_name in WRAP_COLUMNS:
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
             else:
@@ -408,7 +418,7 @@ class OutputXlsxGenerator:
 
     def _set_column_widths(self, ws: Worksheet) -> None:
         """Set column widths based on COLUMN_WIDTHS mapping."""
-        for col_idx, col_name in enumerate(COLUMNS, start=1):
+        for col_idx, col_name in enumerate(self._active_columns, start=1):
             col_letter = get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = COLUMN_WIDTHS.get(col_name, 14)
 

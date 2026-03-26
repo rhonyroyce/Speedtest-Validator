@@ -188,7 +188,7 @@ class TestOutputXlsxGenerate:
         from openpyxl import load_workbook
         gen = OutputXlsxGenerator(config)
         out = tmp_path / "test_output.xlsx"
-        gen.generate(mock_results, mock_threshold_data, out)
+        gen.generate(mock_results, mock_threshold_data, out, mode="full")
         wb = load_workbook(str(out))
         ws = wb["Validation Results"]
         headers = [ws.cell(row=1, column=i).value for i in range(1, 17)]
@@ -317,3 +317,137 @@ class TestOutputDocxGenerate:
         all_text = " ".join(p.text for p in doc.paragraphs)
         assert "KPI Correlation" in all_text
         assert "ACC" in all_text  # KPI domain reference
+
+
+# =====================================================================
+# Cell Data Flattening Tests
+# =====================================================================
+
+class TestCellDataFlattening:
+    """Verify Phase 5 cell_data flattening logic (unit-level, no LLM)."""
+
+    def test_cell_data_flattening_lte(self):
+        """LTE-only result produces flat cell_data with correct fields."""
+        result = {
+            "service_mode": {
+                "lte_params": {"rsrp_dbm": -55.0, "sinr_db": 28.0, "rsrq_db": -5.0, "tx_power_dbm": -10.0},
+                "nr_params": {},
+            },
+            "speedtest": {"dl_throughput_mbps": 85.5, "ul_throughput_mbps": 25.3},
+            "inferred_conn_mode": "LTE Only",
+            "bw_lte_mhz": 20,
+            "bw_nr_c1_mhz": 0,
+            "bw_nr_c2_mhz": 0,
+            "mimo_config": "MIMO",
+        }
+        sm = result.get("service_mode") or {}
+        st = result.get("speedtest") or {}
+        lte = sm.get("lte_params") or {}
+        nr = sm.get("nr_params") or {}
+        cell_data = {
+            "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm"),
+            "sinr": lte.get("sinr_db") or nr.get("nr5g_sinr_db"),
+            "rsrq": lte.get("rsrq_db") or nr.get("nr5g_rsrq_db"),
+            "tx_power": lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm"),
+            "dl_throughput": st.get("dl_throughput_mbps"),
+            "ul_throughput": st.get("ul_throughput_mbps"),
+            "tech": "NR" if nr.get("nr_band") else "LTE",
+            "conn_mode": result.get("inferred_conn_mode", "LTE Only"),
+            "bw_lte_mhz": result.get("bw_lte_mhz", 0),
+            "bw_nr_c1_mhz": result.get("bw_nr_c1_mhz", 0),
+            "bw_nr_c2_mhz": result.get("bw_nr_c2_mhz", 0),
+        }
+        assert cell_data["rsrp"] == -55.0
+        assert cell_data["sinr"] == 28.0
+        assert cell_data["dl_throughput"] == 85.5
+        assert cell_data["tech"] == "LTE"
+        assert cell_data["conn_mode"] == "LTE Only"
+
+    def test_cell_data_flattening_nr(self):
+        """NR result with nr_band populates NR fields and tech='NR'."""
+        result = {
+            "service_mode": {
+                "lte_params": {},
+                "nr_params": {
+                    "nr5g_rsrp_dbm": -68.0,
+                    "nr5g_sinr_db": 30.0,
+                    "nr5g_rsrq_db": -6.0,
+                    "nr_tx_power_dbm": -15.0,
+                    "nr_band": "n41",
+                },
+            },
+            "speedtest": {"dl_throughput_mbps": 450.0, "ul_throughput_mbps": 95.0},
+            "inferred_conn_mode": "NR SA",
+            "bw_lte_mhz": 0,
+            "bw_nr_c1_mhz": 100,
+            "bw_nr_c2_mhz": 0,
+        }
+        sm = result.get("service_mode") or {}
+        st = result.get("speedtest") or {}
+        lte = sm.get("lte_params") or {}
+        nr = sm.get("nr_params") or {}
+        cell_data = {
+            "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm"),
+            "sinr": lte.get("sinr_db") or nr.get("nr5g_sinr_db"),
+            "rsrq": lte.get("rsrq_db") or nr.get("nr5g_rsrq_db"),
+            "tx_power": lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm"),
+            "dl_throughput": st.get("dl_throughput_mbps"),
+            "ul_throughput": st.get("ul_throughput_mbps"),
+            "tech": "NR" if nr.get("nr_band") else "LTE",
+            "conn_mode": result.get("inferred_conn_mode", "LTE Only"),
+        }
+        assert cell_data["rsrp"] == -68.0
+        assert cell_data["sinr"] == 30.0
+        assert cell_data["tech"] == "NR"
+        assert cell_data["conn_mode"] == "NR SA"
+        assert cell_data["dl_throughput"] == 450.0
+
+
+# =====================================================================
+# Fast / Full Mode Column Tests
+# =====================================================================
+
+class TestFastFullModeColumns:
+    """Verify fast mode produces 13 columns and full mode produces 16."""
+
+    def test_fast_mode_13_cols(self, config, mock_results, mock_threshold_data, tmp_path):
+        from openpyxl import load_workbook
+        from code.output_xlsx import FAST_COLUMNS
+        gen = OutputXlsxGenerator(config)
+        out = tmp_path / "fast_output.xlsx"
+        gen.generate(mock_results, mock_threshold_data, out, mode="fast")
+        wb = load_workbook(str(out))
+        ws = wb["Validation Results"]
+        headers = [ws.cell(row=1, column=i).value for i in range(1, 14)]
+        assert headers == list(FAST_COLUMNS)
+        assert len(headers) == 13
+        # Column 14 should be empty (no LLM columns)
+        assert ws.cell(row=1, column=14).value is None
+        wb.close()
+
+    def test_full_mode_16_cols(self, config, mock_results, mock_threshold_data, tmp_path):
+        from openpyxl import load_workbook
+        from code.output_xlsx import FULL_COLUMNS
+        gen = OutputXlsxGenerator(config)
+        out = tmp_path / "full_output.xlsx"
+        gen.generate(mock_results, mock_threshold_data, out, mode="full")
+        wb = load_workbook(str(out))
+        ws = wb["Validation Results"]
+        headers = [ws.cell(row=1, column=i).value for i in range(1, 17)]
+        assert headers == list(FULL_COLUMNS)
+        assert len(headers) == 16
+        wb.close()
+
+    def test_fast_mode_data_row_13_values(self, config, mock_results, mock_threshold_data, tmp_path):
+        from openpyxl import load_workbook
+        gen = OutputXlsxGenerator(config)
+        out = tmp_path / "fast_data.xlsx"
+        gen.generate(mock_results, mock_threshold_data, out, mode="fast")
+        wb = load_workbook(str(out))
+        ws = wb["Validation Results"]
+        # Row 2 (first data row) should have 13 non-None header-aligned values
+        row_vals = [ws.cell(row=2, column=i).value for i in range(1, 14)]
+        assert row_vals[0] is not None  # BTS
+        # Column 14 should be empty
+        assert ws.cell(row=2, column=14).value is None
+        wb.close()
