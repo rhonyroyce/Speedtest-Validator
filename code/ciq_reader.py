@@ -69,6 +69,7 @@ class CIQReader:
                 "gUtranCell": str(row.get("gUtranCell", "")),
                 "arfcnDl": safe_int(row.get("arfcnDl")),
                 "channelBandwidth": convert_bw_khz_to_mhz(bw_khz) if bw_khz else 0.0,
+                "noOfTxAntennas": safe_int(row.get("noOfTxAntennas")),
                 "PCI": safe_int(row.get("PCI")),
                 "radioType": row.get("radioType", ""),
                 "configuredMaxTxPower": safe_int(row.get("configuredMaxTxPower")),

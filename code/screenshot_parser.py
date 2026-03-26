@@ -6,8 +6,10 @@ calls qwen3-vl:8b for extraction, validates JSON schema, builds manifest.
 Implementation: Claude Code Prompt 3 (Screenshot Parser)
 """
 import base64
+import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -340,23 +342,68 @@ class ScreenshotParser:
     # Batch processing
     # ------------------------------------------------------------------
 
-    def process_all_pairs(self, screenshot_pairs: list[dict]) -> list[dict]:
+    def process_all_pairs(
+        self,
+        screenshot_pairs: list[dict],
+        checkpoint_dir: str | Path | None = None,
+    ) -> list[dict]:
         """Extract data from all screenshot pairs and detect connection modes.
 
         Args:
             screenshot_pairs: Output of pair_screenshots() — list of pair dicts.
+            checkpoint_dir: Directory for .checkpoint.json (enables resume). If None, no checkpoint.
 
         Returns:
             List of cell_data dicts with extracted SM/ST data and connection mode.
         """
         results = []
         total = len(screenshot_pairs)
+        start_idx = 0
 
-        for i, pair in enumerate(screenshot_pairs, 1):
+        # Load checkpoint if available
+        checkpoint_path = None
+        if checkpoint_dir:
+            checkpoint_path = Path(checkpoint_dir) / ".checkpoint.json"
+            if checkpoint_path.exists():
+                try:
+                    checkpoint = json.loads(checkpoint_path.read_text())
+                    results = checkpoint.get("results", [])
+                    start_idx = checkpoint.get("next_index", 0)
+                    # Convert path strings back to Path objects in results
+                    logger.info("Resuming from checkpoint: %d/%d already processed", start_idx, total)
+                except (json.JSONDecodeError, KeyError):
+                    logger.warning("Corrupt checkpoint file, starting from scratch")
+                    results = []
+                    start_idx = 0
+
+        batch_start = time.monotonic()
+
+        for i, pair in enumerate(screenshot_pairs):
+            if i < start_idx:
+                continue
+
+            pair_num = i + 1
             sm_path = pair["service_mode"]["path"]
             st_path = pair["speedtest"]["path"]
-            logger.info("Processing pair %d/%d: %s + %s",
-                        i, total, sm_path.name, st_path.name)
+
+            # Progress with ETA
+            elapsed = time.monotonic() - batch_start
+            processed_in_batch = pair_num - start_idx
+            if processed_in_batch > 1 and elapsed > 0:
+                avg_per_pair = elapsed / (processed_in_batch - 1)
+                remaining = (total - pair_num) * avg_per_pair
+                eta_min = int(remaining // 60)
+                eta_sec = int(remaining % 60)
+                pct = int(pair_num / total * 100)
+                logger.info("Processing %d/%d [%d%%] — ETA: %dm %ds — %s + %s",
+                            pair_num, total, pct, eta_min, eta_sec,
+                            sm_path.name, st_path.name)
+            else:
+                pct = int(pair_num / total * 100)
+                logger.info("Processing %d/%d [%d%%] — %s + %s",
+                            pair_num, total, pct, sm_path.name, st_path.name)
+
+            pair_start = time.monotonic()
 
             result = {
                 "cell_id": pair["cell_id"],
@@ -381,6 +428,7 @@ class ScreenshotParser:
                     result["speedtest"] = None
                     result["connection_mode"] = None
                     results.append(result)
+                    self._save_checkpoint(checkpoint_path, results, i + 1)
                     continue
 
             # Extract speedtest with retry at lower resolution
@@ -398,6 +446,7 @@ class ScreenshotParser:
                     result["speedtest"] = None
                     result["connection_mode"] = None
                     results.append(result)
+                    self._save_checkpoint(checkpoint_path, results, i + 1)
                     continue
 
             connection_mode = None
@@ -408,9 +457,50 @@ class ScreenshotParser:
             result["connection_mode"] = connection_mode
             result["service_mode"] = sm_data
             result["speedtest"] = st_data
-            results.append(result)
 
-        logger.info("Processed %d/%d pairs successfully",
-                     sum(1 for r in results if r["service_mode"] and r["speedtest"]),
-                     total)
+            pair_elapsed = time.monotonic() - pair_start
+            logger.debug("Pair %d/%d completed in %.1fs", pair_num, total, pair_elapsed)
+
+            results.append(result)
+            self._save_checkpoint(checkpoint_path, results, i + 1)
+
+        total_elapsed = time.monotonic() - batch_start
+        success_count = sum(1 for r in results if r.get("service_mode") and r.get("speedtest"))
+        logger.info("Processed %d/%d pairs successfully in %.0fs (%.1fs/pair avg)",
+                     success_count, total, total_elapsed,
+                     total_elapsed / max(total - start_idx, 1))
+
+        # Remove checkpoint on successful completion
+        if checkpoint_path and checkpoint_path.exists():
+            checkpoint_path.unlink()
+            logger.debug("Checkpoint file removed after successful completion")
+
         return results
+
+    @staticmethod
+    def _save_checkpoint(checkpoint_path: Path | None, results: list[dict], next_index: int) -> None:
+        """Save extraction progress to checkpoint file for resume."""
+        if checkpoint_path is None:
+            return
+        try:
+            # Serialize results — convert Path objects to strings
+            serializable = []
+            for r in results:
+                entry = {}
+                for k, v in r.items():
+                    if isinstance(v, Path):
+                        entry[k] = str(v)
+                    elif isinstance(v, dict):
+                        entry[k] = {
+                            dk: str(dv) if isinstance(dv, Path) else dv
+                            for dk, dv in v.items()
+                        }
+                    else:
+                        entry[k] = v
+                serializable.append(entry)
+            checkpoint_path.write_text(json.dumps({
+                "next_index": next_index,
+                "results": serializable,
+            }, default=str, indent=2))
+        except Exception as exc:
+            logger.warning("Failed to save checkpoint: %s", exc)

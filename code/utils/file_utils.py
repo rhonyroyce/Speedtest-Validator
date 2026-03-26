@@ -29,6 +29,22 @@ TECH_SUBFOLDER_PATTERNS = {
     "N2500_C2 SA": {"tech": "NR", "band": "n41_C2", "mode": "SA"},
 }
 
+# Fallback: infer technology from the tech token in the filename
+# (used when screenshot is in sector root, not a tech subfolder)
+FILENAME_TECH_MAP = {
+    "LTE": {"tech": "LTE", "band": "LTE"},
+    "NR": {"tech": "NR", "band": "NR"},
+    "N41": {"tech": "NR", "band": "n41"},
+    "N25": {"tech": "NR", "band": "n25"},
+    "N2500": {"tech": "NR", "band": "n25"},
+    "B2": {"tech": "LTE", "band": "B2"},
+    "B4": {"tech": "LTE", "band": "B4"},
+    "B12": {"tech": "LTE", "band": "B12"},
+    "B66": {"tech": "LTE", "band": "B66"},
+    "B19": {"tech": "LTE", "band": "B19"},
+    "B21": {"tech": "LTE", "band": "B21"},
+}
+
 _SECTOR_RE = re.compile(r"[Ss][Ee][Cc][Tt][Oo][Rr]\s*(\d+)", re.IGNORECASE)
 
 
@@ -112,47 +128,64 @@ def parse_screenshot_filename(filename: str) -> dict | None:
     }
 
 
-def discover_screenshots(site_folder: str | Path) -> list[dict]:
-    """Recursively discover all screenshot .jpg files in a site folder.
+def discover_screenshots(
+    site_folder: str | Path,
+    extensions: list[str] | None = None,
+) -> list[dict]:
+    """Recursively discover all screenshot image files in a site folder.
 
     Args:
         site_folder: Root path to the site folder (e.g., ./SFY0803A)
+        extensions: List of file extensions to scan (e.g., [".jpg", ".jpeg", ".png"]).
+                    Defaults to [".jpg", ".jpeg", ".png"].
 
     Returns:
         List of dicts: [{path, sector, tech_subfolder, tech_info, filename,
                          screenshot_type, parsed}, ...]
         sorted by (sector, tech_subfolder, datetime)
     """
+    if extensions is None:
+        extensions = [".jpg", ".jpeg", ".png"]
+
     site_folder = Path(site_folder)
     if not site_folder.is_dir():
         raise FileNotFoundError(f"Site folder not found: {site_folder}")
 
     results = []
-    for jpg in site_folder.rglob("*.jpg"):
-        parsed = parse_screenshot_filename(jpg.name)
-        if parsed is None:
-            logger.debug("Skipping non-screenshot file: %s", jpg)
-            continue
+    for ext in extensions:
+        pattern = f"*{ext}"
+        for jpg in site_folder.rglob(pattern):
+            parsed = parse_screenshot_filename(jpg.name)
+            if parsed is None:
+                logger.debug("Skipping non-screenshot file: %s", jpg)
+                continue
 
-        sector = resolve_sector_number(jpg)
+            sector = resolve_sector_number(jpg)
 
-        # Determine tech subfolder: check if immediate parent matches a known pattern
-        tech_subfolder = None
-        tech_info = None
-        parent_name = jpg.parent.name
-        if parent_name in TECH_SUBFOLDER_PATTERNS:
-            tech_subfolder = parent_name
-            tech_info = TECH_SUBFOLDER_PATTERNS[parent_name]
+            # Determine tech subfolder: check if immediate parent matches a known pattern
+            tech_subfolder = None
+            tech_info = None
+            parent_name = jpg.parent.name
+            if parent_name in TECH_SUBFOLDER_PATTERNS:
+                tech_subfolder = parent_name
+                tech_info = TECH_SUBFOLDER_PATTERNS[parent_name]
+            elif parsed.get("tech"):
+                # Fallback: infer tech from filename token when not in a tech subfolder
+                tech_token = parsed["tech"].upper()
+                fallback = FILENAME_TECH_MAP.get(tech_token)
+                if fallback:
+                    tech_info = fallback
+                    logger.debug("Inferred tech from filename token '%s': %s", parsed["tech"], fallback)
 
-        results.append({
-            "path": jpg,
-            "sector": sector,
-            "tech_subfolder": tech_subfolder,
-            "tech_info": tech_info,
-            "filename": jpg.name,
-            "screenshot_type": parsed["screenshot_type"],
-            "parsed": parsed,
-        })
+            results.append({
+                "path": jpg,
+                "sector": sector,
+                "tech_subfolder": tech_subfolder,
+                "tech_info": tech_info,
+                "filename": jpg.name,
+                "screenshot_type": parsed["screenshot_type"],
+                "parsed": parsed,
+            })
 
     # Sort by sector, tech subfolder, then timestamp
     results.sort(key=lambda r: (

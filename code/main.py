@@ -91,6 +91,16 @@ class DASValidator:
 
         site_id = Path(site_folder).name
 
+        # Set up file logging to {output_dir}/{site_id}_run.log
+        log_path = output_path / f"{site_id}_run.log"
+        file_handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        ))
+        logging.getLogger().addHandler(file_handler)
+        logger.info("Run log: %s", log_path)
+
         # ── Phase 0: Pre-flight Check ─────────────────────────────
         logger.info("Phase 0: Pre-flight Check")
         if not self.ollama.health_check():
@@ -107,7 +117,8 @@ class DASValidator:
 
         # ── Phase 1: Screenshot Discovery ──────────────────────────
         logger.info("Phase 1: Screenshot Discovery")
-        all_screenshots = discover_screenshots(site_folder)
+        extensions = self.config.get("screenshot", {}).get("supported_extensions", [".jpg", ".jpeg", ".png"])
+        all_screenshots = discover_screenshots(site_folder, extensions=extensions)
         pairs = pair_screenshots(all_screenshots)
 
         if not pairs:
@@ -127,7 +138,9 @@ class DASValidator:
         vision_model = self.config["ollama"]["vision_model"]
         self.ollama.ensure_model_loaded(vision_model)
 
-        extraction_results = self.screenshot_parser.process_all_pairs(pairs)
+        extraction_results = self.screenshot_parser.process_all_pairs(
+            pairs, checkpoint_dir=output_path,
+        )
         logger.info("Extracted data from %d pairs", len(extraction_results))
 
         self.ollama.unload_model(vision_model)
@@ -226,11 +239,16 @@ class DASValidator:
                     bw_lte = 0
 
             # Infer connection mode from BW data when VLM defaults to LTE Only
+            original_mode = conn_mode
             if conn_mode == "LTE Only":
                 if bw_lte > 0 and bw_nr_c1 > 0:
                     conn_mode = "EN-DC"
                 elif bw_lte == 0 and bw_nr_c1 > 0:
                     conn_mode = "NR SA"
+            if conn_mode != original_mode:
+                logger.info("Connection mode override: %s → %s (cell=%s, BW LTE=%d NR_C1=%d)",
+                            original_mode, conn_mode,
+                            result.get("cell_id", "?"), bw_lte, bw_nr_c1)
 
             st_result = self.threshold_engine.check_speed_test(
                 dl_mbps=float(st.get("dl_throughput_mbps") or 0),
@@ -371,6 +389,10 @@ class DASValidator:
 
         print(f"\u2705 Output saved to {output_dir}")
         print(f"   {site_id}_Output.xlsx ({len(output_results)} rows, mode={mode})")
+
+        # Clean up file handler
+        logging.getLogger().removeHandler(file_handler)
+        file_handler.close()
 
 
 def main() -> None:
