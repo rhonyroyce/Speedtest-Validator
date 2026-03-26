@@ -1,0 +1,23 @@
+{
+  "screenshot_type": "service_mode",
+  "technology": "LTE",
+  "connection_mode": "LTE_ONLY",
+  "lte_params": {
+    "band": 2,
+    "bandwidth_mhz": 20,
+    "earfcn": 900,
+    "pci": 150,
+    "rsrp_dbm": -58.0,
+    "rsrq_db": -7.0,
+    "sinr_db": 30.0,
+    "tx_power_dbm": -12.0,
+    "mimo_configured": "2x2",
+    "upperlayer_ind_r15": "true",
+    "dcnr_restriction": "false",
+    "ca_status": null,
+    "ul_ca_status": null
+  },
+  "nr_params": null,
+  "timestamp": "2026-02-18 15:55:14",
+  "confidence": 0.92
+}

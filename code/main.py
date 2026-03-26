@@ -328,7 +328,7 @@ class DASValidator:
 
             row = {
                 "bts": site_id,
-                "tech_sector": f"SECTOR {result.get('sector', '?')} / {result.get('tech_subfolder') or result.get('tech_info', {}).get('band', 'Unknown')}",
+                "tech_sector": f"SECTOR {result.get('sector', '?')} / {result.get('tech_subfolder') or (result.get('tech_info') or {}).get('band', 'Unknown')}",
                 "connection_mode": result.get("inferred_conn_mode", _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only")),
                 "bandwidth": bandwidth,
                 "pci": lte.get("pci") or nr.get("nr_pci") or "",
