@@ -81,6 +81,7 @@ HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="s
 HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
 PASS_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
 FAIL_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+EXTRACTION_FAILED_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
 THIN_BORDER = Border(
     left=Side(style="thin"),
     right=Side(style="thin"),
@@ -118,6 +119,7 @@ class OutputXlsxGenerator:
         results: list[dict],
         threshold_data: dict,
         output_path: str | Path,
+        failed: list[dict] | None = None,
     ) -> Path:
         """Create the complete Output.xlsx workbook.
 
@@ -126,6 +128,7 @@ class OutputXlsxGenerator:
             threshold_data: Dict from mop_thresholds.load_threshold_excel()
                             with keys: service_mode, siso, mimo, physical.
             output_path: File path for the output workbook.
+            failed: List of extraction-failed result dicts (orange-shaded rows).
 
         Returns:
             Path to the written file.
@@ -138,7 +141,7 @@ class OutputXlsxGenerator:
         # Tab 1 — Validation Results (default sheet)
         ws_results = wb.active
         ws_results.title = "Validation Results"
-        self._create_results_tab(ws_results, results)
+        self._create_results_tab(ws_results, results, failed=failed or [])
 
         # Tab 2 — Thresholds Reference
         ws_thresh = wb.create_sheet("Thresholds Reference")
@@ -152,18 +155,27 @@ class OutputXlsxGenerator:
     # Tab 1: Validation Results
     # ------------------------------------------------------------------
 
-    def _create_results_tab(self, ws: Worksheet, results: list[dict]) -> None:
+    def _create_results_tab(
+        self, ws: Worksheet, results: list[dict], failed: list[dict] | None = None,
+    ) -> None:
         """Write Tab 1 with 16 columns, formatting, and conditional fills."""
         self._write_header_row(ws)
 
         for row_idx, cell_result in enumerate(results, start=2):
             self._write_data_row(ws, row_idx, cell_result)
 
+        # Append orange-shaded rows for failed extractions
+        next_row = len(results) + 2
+        for fail_result in (failed or []):
+            self._write_failed_row(ws, next_row, fail_result)
+            next_row += 1
+
         self._set_column_widths(ws)
 
         # Enable auto-filter on header row
         last_col = get_column_letter(len(COLUMNS))
-        last_row = max(len(results) + 1, 2)
+        total_rows = len(results) + len(failed or [])
+        last_row = max(total_rows + 1, 2)
         ws.auto_filter.ref = f"A1:{last_col}{last_row}"
 
         # Freeze top row
@@ -252,6 +264,28 @@ class OutputXlsxGenerator:
             fill = self._get_rsrq_fill(rsrq)
             if fill:
                 ws.cell(row=row_num, column=7).fill = fill
+
+    def _write_failed_row(self, ws: Worksheet, row_num: int, fail_result: dict) -> None:
+        """Write an orange-shaded row for a failed extraction."""
+        values = [
+            fail_result.get("cell_id", ""),
+            fail_result.get("tech_subfolder", ""),
+            "",  # connection_mode
+            "",  # bandwidth
+            "",  # pci
+            None, None, None, None, None, None, None,  # RF params + throughput
+            f"EXTRACTION_FAILED: {fail_result.get('error', 'unknown')}",
+            "", "", "",
+        ]
+        for col_idx, value in enumerate(values, start=1):
+            cell = ws.cell(row=row_num, column=col_idx, value=value)
+            cell.border = THIN_BORDER
+            cell.fill = EXTRACTION_FAILED_FILL
+            col_name = COLUMNS[col_idx - 1]
+            if col_name in WRAP_COLUMNS:
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+            else:
+                cell.alignment = Alignment(vertical="center")
 
     # ------------------------------------------------------------------
     # Tab 2: Thresholds Reference

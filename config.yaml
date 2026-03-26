@@ -54,6 +54,7 @@ screenshot:
   supported_extensions: [".jpg", ".jpeg", ".png"]
   service_mode_marker: "Service mode RIL"
   speedtest_marker: "Speedtest"
+  gallery_type: "service_mode"
 
 # Output formatting
 output:

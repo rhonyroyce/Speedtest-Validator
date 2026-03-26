@@ -134,11 +134,17 @@ class DASValidator:
         else:
             logger.info("VLM model unloaded successfully")
 
+        # Split successful vs failed extractions
+        successful = [r for r in extraction_results if r.get("status") != "EXTRACTION_FAILED"]
+        failed = [r for r in extraction_results if r.get("status") == "EXTRACTION_FAILED"]
+        if failed:
+            logger.warning("%d pairs failed extraction and will be skipped in analysis", len(failed))
+
         # ── Phase 3: CIQ Correlation ────────────────────────────────
         logger.info("Phase 3: CIQ Correlation")
         self.ciq_reader.load(ciq_path)
 
-        for result in extraction_results:
+        for result in successful:
             sm = result.get("service_mode") or {}
             lte = sm.get("lte_params") or {}
             nr = sm.get("nr_params") or {}
@@ -169,7 +175,7 @@ class DASValidator:
         self.knowledge_engine.load_all()
         self.threshold_engine.load_thresholds()
 
-        for result in extraction_results:
+        for result in successful:
             sm = result.get("service_mode") or {}
             st = result.get("speedtest") or {}
             lte = sm.get("lte_params") or {}
@@ -251,9 +257,9 @@ class DASValidator:
         self.ollama.ensure_model_loaded(analysis_model)
 
         analysis_data = {}
-        for i, result in enumerate(extraction_results):
+        for i, result in enumerate(successful):
             cell_id = result.get("cell_id", f"cell_{i}")
-            logger.info("Analyzing cell %d/%d: %s", i + 1, len(extraction_results), cell_id)
+            logger.info("Analyzing cell %d/%d: %s", i + 1, len(successful), cell_id)
 
             inferred_mode = result.get("inferred_conn_mode", "LTE Only")
             cell_data = {
@@ -291,9 +297,9 @@ class DASValidator:
         # ── Phase 6: Output Generation ──────────────────────────────
         logger.info("Phase 6: Output Generation")
 
-        # Build output rows
+        # Build output rows from successful extractions
         output_results = []
-        for result in extraction_results:
+        for result in successful:
             sm = result.get("service_mode") or {}
             st = result.get("speedtest") or {}
             lte = sm.get("lte_params") or {}
@@ -327,7 +333,7 @@ class DASValidator:
         }
 
         xlsx_path = output_path / f"{site_id}_Output.xlsx"
-        self.output_xlsx.generate(output_results, threshold_data, xlsx_path)
+        self.output_xlsx.generate(output_results, threshold_data, xlsx_path, failed=failed)
 
         # Site config for docx
         site_config = self.ciq_reader.get_site_config_summary()

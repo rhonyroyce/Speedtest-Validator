@@ -78,6 +78,9 @@ def parse_screenshot_filename(filename: str) -> dict | None:
     elif lower.endswith("speedtest"):
         screenshot_type = "speedtest"
         remainder = stem[: -len("Speedtest")].rstrip("_")
+    elif lower.endswith("gallery"):
+        screenshot_type = "service_mode"
+        remainder = stem[: -len("Gallery")].rstrip("_")
     else:
         logger.debug("Unrecognized screenshot type in filename: %s", filename)
         return None

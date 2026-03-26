@@ -220,7 +220,7 @@ class ScreenshotParser:
     # VLM extraction
     # ------------------------------------------------------------------
 
-    def extract_service_mode(self, image_path: str | Path) -> dict[str, Any]:
+    def extract_service_mode(self, image_path: str | Path, max_dimension: int = 1024) -> dict[str, Any]:
         """Extract Service Mode parameters from a screenshot via VLM.
 
         Encodes image as base64, sends to qwen3-vl:8b with the service mode
@@ -232,7 +232,7 @@ class ScreenshotParser:
         Raises:
             ValueError: If all extraction attempts fail validation.
         """
-        img_b64 = self._encode_image(image_path)
+        img_b64 = self._encode_image(image_path, max_dimension=max_dimension)
         parsed, attempt = self.client.chat_vision_json(img_b64, self._sm_prompt)
 
         if parsed is None:
@@ -251,7 +251,7 @@ class ScreenshotParser:
                 f"Service mode schema validation failed for {image_path}: {exc}"
             ) from exc
 
-    def extract_speedtest(self, image_path: str | Path) -> dict[str, Any]:
+    def extract_speedtest(self, image_path: str | Path, max_dimension: int = 1024) -> dict[str, Any]:
         """Extract Speedtest results from a screenshot via VLM.
 
         Encodes image as base64, sends to qwen3-vl:8b with the speedtest
@@ -263,7 +263,7 @@ class ScreenshotParser:
         Raises:
             ValueError: If all extraction attempts fail validation.
         """
-        img_b64 = self._encode_image(image_path)
+        img_b64 = self._encode_image(image_path, max_dimension=max_dimension)
         parsed, attempt = self.client.chat_vision_json(img_b64, self._st_prompt)
 
         if parsed is None:
@@ -358,33 +358,57 @@ class ScreenshotParser:
             logger.info("Processing pair %d/%d: %s + %s",
                         i, total, sm_path.name, st_path.name)
 
+            result = {
+                "cell_id": pair["cell_id"],
+                "sector": pair["sector"],
+                "tech_subfolder": pair["tech_subfolder"],
+                "tech_info": pair["tech_info"],
+                "duration_sec": pair["duration_sec"],
+            }
+
+            # Extract service mode with retry at lower resolution
             try:
                 sm_data = self.extract_service_mode(sm_path)
-            except ValueError as exc:
-                logger.error("Service mode extraction failed: %s", exc)
-                sm_data = None
+            except (ValueError, KeyError) as exc:
+                logger.warning("Extraction failed for %s: %s", sm_path, exc)
+                try:
+                    sm_data = self.extract_service_mode(sm_path, max_dimension=768)
+                except Exception:
+                    logger.error("Retry also failed for %s", sm_path)
+                    result["status"] = "EXTRACTION_FAILED"
+                    result["error"] = str(exc)
+                    result["service_mode"] = None
+                    result["speedtest"] = None
+                    result["connection_mode"] = None
+                    results.append(result)
+                    continue
 
+            # Extract speedtest with retry at lower resolution
             try:
                 st_data = self.extract_speedtest(st_path)
-            except ValueError as exc:
-                logger.error("Speedtest extraction failed: %s", exc)
-                st_data = None
+            except (ValueError, KeyError) as exc:
+                logger.warning("Extraction failed for %s: %s", st_path, exc)
+                try:
+                    st_data = self.extract_speedtest(st_path, max_dimension=768)
+                except Exception:
+                    logger.error("Retry also failed for %s", st_path)
+                    result["status"] = "EXTRACTION_FAILED"
+                    result["error"] = str(exc)
+                    result["service_mode"] = sm_data
+                    result["speedtest"] = None
+                    result["connection_mode"] = None
+                    results.append(result)
+                    continue
 
             connection_mode = None
             if sm_data:
                 connection_mode = self.detect_connection_mode(sm_data)
                 sm_data["connection_mode"] = connection_mode
 
-            results.append({
-                "cell_id": pair["cell_id"],
-                "sector": pair["sector"],
-                "tech_subfolder": pair["tech_subfolder"],
-                "tech_info": pair["tech_info"],
-                "duration_sec": pair["duration_sec"],
-                "connection_mode": connection_mode,
-                "service_mode": sm_data,
-                "speedtest": st_data,
-            })
+            result["connection_mode"] = connection_mode
+            result["service_mode"] = sm_data
+            result["speedtest"] = st_data
+            results.append(result)
 
         logger.info("Processed %d/%d pairs successfully",
                      sum(1 for r in results if r["service_mode"] and r["speedtest"]),

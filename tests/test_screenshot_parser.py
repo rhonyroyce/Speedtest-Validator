@@ -19,6 +19,7 @@ from code.screenshot_parser import (
     ServiceModeData,
     SpeedtestData,
 )
+from code.utils.file_utils import parse_screenshot_filename
 from code.utils.text_utils import extract_json, strip_markdown_fences, strip_thinking_tags
 
 
@@ -309,3 +310,92 @@ class TestSchemaValidation:
         """Confidence must be 0.0-1.0."""
         with pytest.raises(ValueError):
             ServiceModeData(confidence=1.5)
+
+
+# ---------------------------------------------------------------------------
+# Gallery filename parsing tests
+# ---------------------------------------------------------------------------
+
+class TestGalleryFilename:
+    def test_parse_gallery_filename(self):
+        """Gallery suffix recognized as service_mode screenshot type."""
+        result = parse_screenshot_filename("CELL01_LTE_20250101_120000_Gallery.jpg")
+        assert result is not None
+        assert result["screenshot_type"] == "service_mode"
+        assert result["cell_id"] == "CELL01"
+        assert result["tech"] == "LTE"
+        assert result["date"] == "20250101"
+        assert result["time"] == "120000"
+
+    def test_parse_gallery_case_insensitive(self):
+        """Gallery matching is case-insensitive."""
+        result = parse_screenshot_filename("CELL02_NR_20250315_093045_gallery.jpg")
+        assert result is not None
+        assert result["screenshot_type"] == "service_mode"
+
+    def test_parse_gallery_uppercase(self):
+        """Uppercase GALLERY also works."""
+        result = parse_screenshot_filename("CELL03_NR_20250315_093045_GALLERY.jpg")
+        assert result is not None
+        assert result["screenshot_type"] == "service_mode"
+
+
+# ---------------------------------------------------------------------------
+# Extraction failure handling tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def valid_image(tmp_path):
+    """Create a valid JPEG file that Pillow can open."""
+    from PIL import Image
+    img_path = tmp_path / "valid_test.jpg"
+    img = Image.new("RGB", (100, 100), color="red")
+    img.save(str(img_path), format="JPEG")
+    return img_path
+
+
+class TestExtractionFailure:
+    def test_extraction_failure_skipped(self, parser, mock_ollama, valid_image):
+        """Failed extraction marks result as EXTRACTION_FAILED and continues."""
+        # Both attempts raise ValueError
+        mock_ollama.chat_vision_json.return_value = (None, 3)
+
+        pairs = [{
+            "service_mode": {"path": valid_image},
+            "speedtest": {"path": valid_image},
+            "cell_id": "CELL01",
+            "sector": 1,
+            "tech_subfolder": "L19",
+            "tech_info": {"tech": "LTE", "band": "B19"},
+            "duration_sec": 30,
+        }]
+
+        results = parser.process_all_pairs(pairs)
+        assert len(results) == 1
+        assert results[0]["status"] == "EXTRACTION_FAILED"
+        assert results[0]["error"] is not None
+        assert results[0]["service_mode"] is None
+
+    def test_successful_extraction_has_no_status(self, parser, mock_ollama, valid_image):
+        """Successful extraction does not set EXTRACTION_FAILED status."""
+        mock_ollama.chat_vision_json.side_effect = [
+            ({"screenshot_type": "service_mode", "connection_mode": "LTE_ONLY",
+              "lte_params": {"rsrp_dbm": -55.0}, "confidence": 0.9}, 1),
+            ({"screenshot_type": "speedtest", "dl_throughput_mbps": 200.0,
+              "ul_throughput_mbps": 40.0, "confidence": 0.9}, 1),
+        ]
+
+        pairs = [{
+            "service_mode": {"path": valid_image},
+            "speedtest": {"path": valid_image},
+            "cell_id": "CELL02",
+            "sector": 1,
+            "tech_subfolder": "L19",
+            "tech_info": {"tech": "LTE", "band": "B19"},
+            "duration_sec": 25,
+        }]
+
+        results = parser.process_all_pairs(pairs)
+        assert len(results) == 1
+        assert results[0].get("status") != "EXTRACTION_FAILED"
+        assert results[0]["service_mode"] is not None
