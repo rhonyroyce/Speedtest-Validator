@@ -29,7 +29,8 @@ class OllamaClient:
         self.extraction_temperature = ollama_cfg.get("extraction_temperature", 0.15)
         self.analysis_temperature = ollama_cfg.get("analysis_temperature", 0.3)
         self.timeout = ollama_cfg.get("timeout", 300)
-        self.vision_timeout = ollama_cfg.get("vision_timeout", 600)
+        self.vision_timeout = ollama_cfg.get("vision_timeout", 90)
+        self.num_predict = ollama_cfg.get("num_predict", 1024)
 
     # ------------------------------------------------------------------
     # Low-level HTTP
@@ -159,7 +160,10 @@ class OllamaClient:
             "model": model,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": temperature},
+            "options": {
+                "temperature": temperature,
+                "num_predict": self.num_predict,
+            },
         }
         resp = self._request_with_retry("POST", "/api/chat", body, timeout=timeout or self.timeout)
         return resp.get("message", {}).get("content", "")

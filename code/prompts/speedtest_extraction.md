@@ -1,6 +1,6 @@
 ---
 version: "1.0"
-model: qwen3-vl:8b
+model: qwen2.5vl:7b
 temperature: 0.15
 output_format: json
 accuracy_target: 0.85
@@ -51,3 +51,5 @@ Return ONLY valid JSON matching this exact structure:
 - Do NOT confuse DL and UL — DL is always listed first (left)
 
 CRITICAL: Your entire response must be ONLY the JSON object. No explanation, no markdown code fences, no text before or after. Start with { and end with }.
+
+/no_think

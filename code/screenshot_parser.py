@@ -71,6 +71,33 @@ def _sanitize_numeric_fields(data: dict) -> dict:
     return sanitized
 
 
+def _safe_int(v: Any) -> int | None:
+    """Coerce VLM output to int, returning None for garbage like '94-3344' or '7cd'."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    # Reject strings with non-numeric chars (except leading minus and decimal point)
+    if not s:
+        return None
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_float(v: Any) -> float | None:
+    """Coerce VLM output to float, returning None for garbage."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
 class LTEParams(BaseModel):
     band: int | None = None
     bandwidth_mhz: float | None = None
@@ -91,20 +118,15 @@ class LTEParams(BaseModel):
     def sanitize_placeholders(cls, data: Any) -> Any:
         return _sanitize_numeric_fields(data) if isinstance(data, dict) else data
 
-    @field_validator("band", mode="before")
+    @field_validator("band", "earfcn", "pci", mode="before")
     @classmethod
-    def coerce_band(cls, v: Any) -> int | None:
-        """Handle VLM returning PLMN ID (e.g. '310-260') instead of band number."""
-        if v is None:
-            return None
-        s = str(v).strip()
-        if "-" in s and not s.startswith("-"):
-            # PLMN ID like "310-260" — not a band number
-            return None
-        try:
-            return int(float(s))
-        except (ValueError, TypeError):
-            return None
+    def coerce_int_fields(cls, v: Any) -> int | None:
+        return _safe_int(v)
+
+    @field_validator("bandwidth_mhz", "rsrp_dbm", "rsrq_db", "sinr_db", "tx_power_dbm", mode="before")
+    @classmethod
+    def coerce_float_fields(cls, v: Any) -> float | None:
+        return _safe_float(v)
 
     @field_validator("mimo_configured", mode="before")
     @classmethod
@@ -138,6 +160,19 @@ class NRParams(BaseModel):
     @classmethod
     def sanitize_placeholders(cls, data: Any) -> Any:
         return _sanitize_numeric_fields(data) if isinstance(data, dict) else data
+
+    @field_validator("nr_arfcn", "nr_pci", "nr_scs_khz", mode="before")
+    @classmethod
+    def coerce_int_fields(cls, v: Any) -> int | None:
+        return _safe_int(v)
+
+    @field_validator("nr_bandwidth_mhz", "nr5g_rsrp_dbm", "nr5g_rsrq_db", "nr5g_sinr_db",
+                     "nr_tx_power_dbm", "nr_bler_pct", "nr_dl_scheduling_pct",
+                     "nr_ant_max_rsrp", "nr_ant_min_rsrp", "endc_total_tx_power_dbm",
+                     "nr_rx0_rsrp", "nr_rx1_rsrp", "nr_rx2_rsrp", "nr_rx3_rsrp", mode="before")
+    @classmethod
+    def coerce_float_fields(cls, v: Any) -> float | None:
+        return _safe_float(v)
 
 
 class ServiceModeData(BaseModel):
@@ -184,6 +219,7 @@ class ScreenshotParser:
     def __init__(self, config: dict, ollama_client: OllamaClient):
         self.config = config
         self.client = ollama_client
+        self._max_dim = config.get("ollama", {}).get("max_image_dimension", 768)
         prompts_dir = Path(__file__).parent / "prompts"
         self._sm_prompt = (prompts_dir / "service_mode_extraction.md").read_text()
         self._st_prompt = (prompts_dir / "speedtest_extraction.md").read_text()
@@ -223,12 +259,10 @@ class ScreenshotParser:
     # VLM extraction
     # ------------------------------------------------------------------
 
-    def extract_service_mode(self, image_path: str | Path, max_dimension: int = 1024) -> dict[str, Any]:
+    def extract_service_mode(self, image_path: str | Path, max_dimension: int | None = None) -> dict[str, Any]:
         """Extract Service Mode parameters from a screenshot via VLM.
 
-        Splits image into LTE and NR panels, sends each panel individually
-        for focused extraction (2 VLM calls instead of 1 full-image call),
-        then merges results and validates against ServiceModeData schema.
+        Single full-image call for speed. No panel splitting.
 
         Returns:
             Validated service mode data dict.
@@ -236,31 +270,7 @@ class ScreenshotParser:
         Raises:
             ValueError: If all extraction attempts fail validation.
         """
-        # Split into panels for focused extraction
-        try:
-            panels = split_panels(image_path, SM_LAYOUT)
-        except (FileNotFoundError, ValueError):
-            panels = {}
-
-        if panels and "lte_params" in panels and "nr_params" in panels:
-            # Focused panel extraction: LTE panel + NR panel separately
-            lte_parsed = self._extract_panel(panels["lte_params"], "lte", image_path)
-            nr_parsed = self._extract_panel(panels["nr_params"], "nr", image_path)
-
-            # Merge LTE + NR extractions into a single ServiceModeData
-            merged = self._merge_panel_extractions(lte_parsed, nr_parsed)
-            if merged is not None:
-                try:
-                    validated = ServiceModeData(**merged)
-                    data = validated.model_dump()
-                    logger.debug("Panel-based SM extraction succeeded for %s", Path(image_path).name)
-                    return data
-                except Exception as exc:
-                    logger.warning("Panel merge validation failed for %s: %s — falling back to full image",
-                                   image_path, exc)
-
-        # Fallback: full-image extraction (original path)
-        img_b64 = self._encode_image(image_path, max_dimension=max_dimension)
+        img_b64 = self._encode_image(image_path, max_dimension=max_dimension or self._max_dim)
         parsed, attempt = self.client.chat_vision_json(img_b64, self._sm_prompt)
 
         if parsed is None:
@@ -278,11 +288,10 @@ class ScreenshotParser:
                 f"Service mode schema validation failed for {image_path}: {exc}"
             ) from exc
 
-    def extract_speedtest(self, image_path: str | Path, max_dimension: int = 1024) -> dict[str, Any]:
+    def extract_speedtest(self, image_path: str | Path, max_dimension: int | None = None) -> dict[str, Any]:
         """Extract Speedtest results from a screenshot via VLM.
 
-        Splits image into results and details panels for focused extraction,
-        then merges and validates against SpeedtestData schema.
+        Single full-image call for speed. No panel splitting.
 
         Returns:
             Validated speedtest data dict.
@@ -290,32 +299,7 @@ class ScreenshotParser:
         Raises:
             ValueError: If all extraction attempts fail validation.
         """
-        # Try panel-based extraction first
-        try:
-            panels = split_panels(image_path, ST_LAYOUT)
-        except (FileNotFoundError, ValueError):
-            panels = {}
-
-        if panels and "results" in panels:
-            # Send the results panel (DL/UL speeds) for focused extraction
-            parsed, attempt = self.client.chat_vision_json(panels["results"], self._st_prompt)
-            if parsed is not None:
-                # Enrich with detail panel if available
-                if "details" in panels:
-                    detail_parsed, _ = self.client.chat_vision_json(panels["details"], self._st_prompt)
-                    if detail_parsed:
-                        parsed = self._merge_speedtest_panels(parsed, detail_parsed)
-                try:
-                    validated = SpeedtestData(**parsed)
-                    data = validated.model_dump()
-                    logger.debug("Panel-based ST extraction succeeded for %s", Path(image_path).name)
-                    return data
-                except Exception as exc:
-                    logger.warning("Panel ST validation failed for %s: %s — falling back",
-                                   image_path, exc)
-
-        # Fallback: full-image extraction
-        img_b64 = self._encode_image(image_path, max_dimension=max_dimension)
+        img_b64 = self._encode_image(image_path, max_dimension=max_dimension or self._max_dim)
         parsed, attempt = self.client.chat_vision_json(img_b64, self._st_prompt)
 
         if parsed is None:
@@ -543,41 +527,33 @@ class ScreenshotParser:
                 "duration_sec": pair["duration_sec"],
             }
 
-            # Extract service mode with retry at lower resolution
+            # Extract service mode — single attempt, no fallback
             try:
                 sm_data = self.extract_service_mode(sm_path)
             except (ValueError, KeyError) as exc:
-                logger.warning("Extraction failed for %s: %s", sm_path, exc)
-                try:
-                    sm_data = self.extract_service_mode(sm_path, max_dimension=768)
-                except Exception:
-                    logger.error("Retry also failed for %s", sm_path)
-                    result["status"] = "EXTRACTION_FAILED"
-                    result["error"] = str(exc)
-                    result["service_mode"] = None
-                    result["speedtest"] = None
-                    result["connection_mode"] = None
-                    results.append(result)
-                    self._save_checkpoint(checkpoint_path, results, i + 1)
-                    continue
+                logger.warning("SM extraction failed for %s: %s", sm_path, exc)
+                result["status"] = "EXTRACTION_FAILED"
+                result["error"] = str(exc)
+                result["service_mode"] = None
+                result["speedtest"] = None
+                result["connection_mode"] = None
+                results.append(result)
+                self._save_checkpoint(checkpoint_path, results, i + 1)
+                continue
 
-            # Extract speedtest with retry at lower resolution
+            # Extract speedtest — single attempt, no fallback
             try:
                 st_data = self.extract_speedtest(st_path)
             except (ValueError, KeyError) as exc:
-                logger.warning("Extraction failed for %s: %s", st_path, exc)
-                try:
-                    st_data = self.extract_speedtest(st_path, max_dimension=768)
-                except Exception:
-                    logger.error("Retry also failed for %s", st_path)
-                    result["status"] = "EXTRACTION_FAILED"
-                    result["error"] = str(exc)
-                    result["service_mode"] = sm_data
-                    result["speedtest"] = None
-                    result["connection_mode"] = None
-                    results.append(result)
-                    self._save_checkpoint(checkpoint_path, results, i + 1)
-                    continue
+                logger.warning("ST extraction failed for %s: %s", st_path, exc)
+                result["status"] = "EXTRACTION_FAILED"
+                result["error"] = str(exc)
+                result["service_mode"] = sm_data
+                result["speedtest"] = None
+                result["connection_mode"] = None
+                results.append(result)
+                self._save_checkpoint(checkpoint_path, results, i + 1)
+                continue
 
             connection_mode = None
             if sm_data:
