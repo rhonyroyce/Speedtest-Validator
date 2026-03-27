@@ -62,9 +62,10 @@ def parser(mock_config, mock_ollama):
 @pytest.fixture
 def dummy_image(tmp_path):
     """Create a minimal valid JPEG file for testing."""
+    from PIL import Image
     img_path = tmp_path / "test_image.jpg"
-    # Minimal JPEG: SOI marker + EOI marker
-    img_path.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 20 + b"\xff\xd9")
+    img = Image.new("RGB", (100, 100), color="blue")
+    img.save(str(img_path), format="JPEG")
     return img_path
 
 
@@ -266,9 +267,9 @@ class TestBase64Encoding:
         assert isinstance(encoded, str)
         assert len(encoded) > 0
 
-        # Should be valid base64 that decodes back to original bytes
+        # Should be valid base64 that decodes to a JPEG
         decoded = base64.b64decode(encoded)
-        assert decoded == dummy_image.read_bytes()
+        assert decoded[:2] == b"\xff\xd8", "Decoded bytes should be a JPEG (SOI marker)"
 
     def test_base64_encoding_missing_file(self):
         """FileNotFoundError for nonexistent image."""

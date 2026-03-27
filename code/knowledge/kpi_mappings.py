@@ -6,6 +6,24 @@ Used to populate the "Impact on KPIs" column in Output.xlsx.
 Reference: MS2 KPI and Counters.xlsx (48 NR + 40 LTE KPIs across 6 domains)
 Implementation: Claude Code Prompt 5 (Knowledge Engine)
 """
+from __future__ import annotations
+
+from typing import Callable, TypedDict
+
+
+class KPIImpactEntry(TypedDict):
+    """Single entry in RF_TO_KPI_MAPPINGS."""
+    condition: str
+    trigger: Callable[[float], bool] | None
+    impacts: list[tuple[str, str, str]]  # (domain, kpi_name, description)
+
+
+class KPIImpactResult(TypedDict):
+    """Return type from get_kpi_impacts()."""
+    domain: str
+    kpi: str
+    description: str
+
 
 # 6 KPI domains from MS2 framework
 KPI_DOMAINS = {

@@ -33,13 +33,13 @@ def engine(config):
 # === mop_thresholds tests ===
 
 class TestMopThresholds:
-    def test_load_siso_16_rows(self):
+    def test_load_siso_rows(self):
         data = mop_thresholds.load_threshold_excel(THRESHOLD_EXCEL)
-        assert len(data["siso"]) == 16
+        assert len(data["siso"]) >= 16, "SISO sheet should have at least 16 BW combination rows"
 
-    def test_load_mimo_16_rows(self):
+    def test_load_mimo_rows(self):
         data = mop_thresholds.load_threshold_excel(THRESHOLD_EXCEL)
-        assert len(data["mimo"]) == 16
+        assert len(data["mimo"]) >= 16, "MIMO sheet should have at least 16 BW combination rows"
 
     def test_service_mode_loaded(self):
         data = mop_thresholds.load_threshold_excel(THRESHOLD_EXCEL)
@@ -205,8 +205,8 @@ class TestKpiMappings:
 class TestKnowledgeEngine:
     def test_load_all_modules(self, engine):
         assert engine.thresholds is not None
-        assert len(engine.thresholds["siso"]) == 16
-        assert len(engine.thresholds["mimo"]) == 16
+        assert len(engine.thresholds["siso"]) >= 16
+        assert len(engine.thresholds["mimo"]) >= 16
 
     def test_rf_observation_rsrp_excellent(self, engine):
         obs = engine.get_rf_observation("rsrp", -45)

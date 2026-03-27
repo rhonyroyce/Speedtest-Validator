@@ -80,16 +80,18 @@ class DASValidator:
         output_dir: str,
         dry_run: bool = False,
         mode: str = "fast",
+        site_name: str | None = None,
     ) -> None:
         """Execute the DAS validation pipeline (Phase 0–6).
 
         Args:
             mode: "fast" skips Phase 5 (13-col output), "full" runs analysis (16-col output).
+            site_name: Override for output filenames (default: site folder name).
         """
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        site_id = Path(site_folder).name
+        site_id = site_name or Path(site_folder).name
 
         # Set up file logging to {output_dir}/{site_id}_run.log
         log_path = output_path / f"{site_id}_run.log"
@@ -428,6 +430,11 @@ def main() -> None:
         help="fast: skip LLM analysis (13 cols); full: run analysis model (16 cols) (default: fast)",
     )
     parser.add_argument(
+        "--site-name",
+        default=None,
+        help="Override site name for output filenames (default: site folder name)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Process only first 2 screenshot pairs",
@@ -465,6 +472,7 @@ def main() -> None:
             output_dir=args.output_dir,
             dry_run=args.dry_run,
             mode=args.mode,
+            site_name=args.site_name,
         )
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)

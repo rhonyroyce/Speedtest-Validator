@@ -5,6 +5,24 @@ observation text for the Observations column in Output.xlsx.
 
 Implementation: Claude Code Prompt 5 (Knowledge Engine)
 """
+from __future__ import annotations
+
+from typing import TypedDict
+
+
+class QualityRange(TypedDict):
+    """Single quality tier entry."""
+    range: tuple[float, float]
+    label: str
+    color: str
+
+
+class ClassificationResult(TypedDict):
+    """Return type from classify_* functions."""
+    quality: str
+    label: str
+    color: str
+
 
 # RSRP quality labels and observation rules
 RSRP_QUALITY = {
@@ -56,6 +74,7 @@ DAS_SERVICE_MODE_THRESHOLDS = {
 
 # Observation templates keyed by parameter + condition
 OBSERVATION_TEMPLATES = {
+    "rsrp_error": "RSRP {value} dBm — ERROR: positive RSRP is physically impossible. Check screenshot extraction or measurement tool.",
     "rsrp_excellent": "RSRP {value} dBm — excellent signal strength, well within DAS proximity range.",
     "rsrp_good": "RSRP {value} dBm — good signal, within DAS validation thresholds.",
     "rsrp_fair": "RSRP {value} dBm — marginal signal for DAS environment. May indicate antenna feeder loss or suboptimal positioning.",
@@ -96,29 +115,31 @@ CONNECTION_MODE_INDICATORS = {
 }
 
 
-def classify_rsrp(value_dbm: float) -> dict:
+def classify_rsrp(value_dbm: float) -> ClassificationResult:
     """Return quality classification for an RSRP value."""
+    if value_dbm > 0:
+        return {"quality": "error", "label": "Error (positive RSRP)", "color": "red"}
     for key, info in RSRP_QUALITY.items():
         low, high = info["range"]
-        if low <= value_dbm < high:
+        if low <= value_dbm <= high:
             return {"quality": key, "label": info["label"], "color": info["color"]}
     return {"quality": "unknown", "label": "Unknown", "color": "gray"}
 
 
-def classify_sinr(value_db: float) -> dict:
+def classify_sinr(value_db: float) -> ClassificationResult:
     """Return quality classification for a SINR value."""
     for key, info in SINR_QUALITY.items():
         low, high = info["range"]
-        if low <= value_db < high:
+        if low <= value_db <= high:
             return {"quality": key, "label": info["label"], "color": info["color"]}
     return {"quality": "unknown", "label": "Unknown", "color": "gray"}
 
 
-def classify_rsrq(value_db: float) -> dict:
+def classify_rsrq(value_db: float) -> ClassificationResult:
     """Return quality classification for an RSRQ value."""
     for key, info in RSRQ_QUALITY.items():
         low, high = info["range"]
-        if low <= value_db < high:
+        if low <= value_db <= high:
             return {"quality": key, "label": info["label"], "color": info["color"]}
     return {"quality": "unknown", "label": "Unknown", "color": "gray"}
 
@@ -140,7 +161,9 @@ def generate_observation(param: str, value: float, **kwargs) -> str:
         classification = classify_rsrp(value)
         quality = classification["quality"]
         # Map quality to template key
-        if quality in ("excellent", "good"):
+        if quality == "error":
+            key = "rsrp_error"
+        elif quality in ("excellent", "good"):
             key = f"rsrp_{quality}"
         elif quality == "fair":
             key = "rsrp_fair"

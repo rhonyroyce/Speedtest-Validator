@@ -12,6 +12,7 @@ Implementation: Claude Code Prompt 7 (Analysis Engine)
 """
 import logging
 import os
+import re
 
 from .utils.text_utils import (
     strip_thinking_tags,
@@ -136,10 +137,13 @@ class AnalysisEngine:
         Placeholders use {PLACEHOLDER} format. Values are drawn from the
         flattened context dict.
         """
-        # Load template (with caching)
+        # Load template (with caching), stripping YAML front matter if present
         if template_path not in self._template_cache:
             with open(template_path, "r", encoding="utf-8") as f:
-                self._template_cache[template_path] = f.read()
+                raw = f.read()
+            # Strip YAML front matter (---\n...\n---)
+            raw = re.sub(r"\A---\n.*?\n---\n*", "", raw, count=1, flags=re.DOTALL)
+            self._template_cache[template_path] = raw
         template = self._template_cache[template_path]
 
         # Build flat replacement map from nested context

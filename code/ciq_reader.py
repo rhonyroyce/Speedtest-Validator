@@ -76,6 +76,24 @@ class CIQReader:
             })
         logger.info("Loaded %d NR cells from gUtranCell info", len(self._nr_cells))
 
+        # Check for PCI collisions across all cells
+        self._check_pci_collisions()
+
+    def _check_pci_collisions(self) -> None:
+        """Warn when multiple cells share the same PCI value."""
+        pci_to_cells: dict[int, list[str]] = defaultdict(list)
+        for cell in self._lte_cells:
+            pci = cell.get("PCI")
+            if pci is not None and pci != 0:
+                pci_to_cells[pci].append(cell["cellId"])
+        for cell in self._nr_cells:
+            pci = cell.get("PCI")
+            if pci is not None and pci != 0:
+                pci_to_cells[pci].append(cell["gUtranCell"])
+        for pci, cells in pci_to_cells.items():
+            if len(cells) > 1:
+                logger.warning("PCI collision: PCI=%d shared by cells %s", pci, cells)
+
     def get_lte_cells(self) -> list[dict]:
         """Return list of parsed LTE cell dicts."""
         return self._lte_cells

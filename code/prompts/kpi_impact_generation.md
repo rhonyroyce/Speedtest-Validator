@@ -1,5 +1,12 @@
+---
+version: "1.0"
+model: gpt-oss:20b
+temperature: 0.3
+output_format: text
+accuracy_target: 0.90
+---
+
 # KPI Impact Generation Prompt
-# Model: gpt-oss:20b | Temperature: 0.3 | Output: Plain text
 
 ## System Prompt
 

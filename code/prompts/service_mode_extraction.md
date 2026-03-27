@@ -1,5 +1,12 @@
+---
+version: "1.0"
+model: qwen3-vl:8b
+temperature: 0.15
+output_format: json
+accuracy_target: 0.75
+---
+
 # Service Mode Screenshot Extraction Prompt
-# Model: qwen3-vl:8b | Temperature: 0.15 | Output: JSON
 
 ## System Prompt
 

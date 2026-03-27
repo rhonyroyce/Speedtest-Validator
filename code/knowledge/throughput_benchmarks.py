@@ -5,6 +5,16 @@ Used by the analysis engine to generate meaningful Observations and Recommendati
 
 Implementation: Claude Code Prompt 5 (Knowledge Engine)
 """
+from __future__ import annotations
+
+from typing import TypedDict
+
+
+class ThroughputEntry(TypedDict):
+    """Single peak/typical_das entry keyed by BW MHz."""
+    peak: float
+    typical_das: float
+
 
 # Theoretical peak DL throughput by technology and bandwidth (Mbps)
 # Based on 3GPP specifications and T-Mobile DAS deployment experience

@@ -9,8 +9,11 @@ Handles the messy reality of LLM-generated text:
 
 Implementation: Claude Code Prompt 2 (Ollama Client) — shared utility
 """
+import logging
 import re
 import json
+
+logger = logging.getLogger(__name__)
 
 
 def strip_thinking_tags(text: str) -> str:
@@ -118,9 +121,11 @@ def truncate_for_cell(text: str, max_chars: int = 32767) -> str:
     """
     if len(text) <= max_chars:
         return text
-    truncated = text[: max_chars - 3]
+    logger.warning("Truncating text from %d to %d chars for Excel cell", len(text), max_chars)
+    suffix = " [TRUNCATED]"
+    truncated = text[: max_chars - len(suffix)]
     # Try to break at last sentence boundary
     last_period = truncated.rfind(".")
     if last_period > max_chars * 0.8:
-        return truncated[: last_period + 1]
-    return truncated + "..."
+        return truncated[: last_period + 1] + suffix
+    return truncated + suffix

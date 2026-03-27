@@ -155,6 +155,9 @@ def discover_screenshots(
     for ext in extensions:
         pattern = f"*{ext}"
         for jpg in site_folder.rglob(pattern):
+            # Skip Windows Zone.Identifier alternate data stream files
+            if ":Zone.Identifier" in str(jpg) or jpg.name.endswith(":Zone.Identifier"):
+                continue
             parsed = parse_screenshot_filename(jpg.name)
             if parsed is None:
                 logger.debug("Skipping non-screenshot file: %s", jpg)
