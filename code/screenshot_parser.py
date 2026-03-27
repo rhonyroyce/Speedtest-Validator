@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .image_preprocessor import SM_LAYOUT, ST_LAYOUT, split_panels
 from .ollama_client import OllamaClient
 from .utils.file_utils import discover_screenshots, pair_screenshots
 
@@ -225,8 +226,9 @@ class ScreenshotParser:
     def extract_service_mode(self, image_path: str | Path, max_dimension: int = 1024) -> dict[str, Any]:
         """Extract Service Mode parameters from a screenshot via VLM.
 
-        Encodes image as base64, sends to qwen3-vl:8b with the service mode
-        prompt, validates JSON against ServiceModeData schema. Retries up to 3 times.
+        Splits image into LTE and NR panels, sends each panel individually
+        for focused extraction (2 VLM calls instead of 1 full-image call),
+        then merges results and validates against ServiceModeData schema.
 
         Returns:
             Validated service mode data dict.
@@ -234,13 +236,36 @@ class ScreenshotParser:
         Raises:
             ValueError: If all extraction attempts fail validation.
         """
+        # Split into panels for focused extraction
+        try:
+            panels = split_panels(image_path, SM_LAYOUT)
+        except (FileNotFoundError, ValueError):
+            panels = {}
+
+        if panels and "lte_params" in panels and "nr_params" in panels:
+            # Focused panel extraction: LTE panel + NR panel separately
+            lte_parsed = self._extract_panel(panels["lte_params"], "lte", image_path)
+            nr_parsed = self._extract_panel(panels["nr_params"], "nr", image_path)
+
+            # Merge LTE + NR extractions into a single ServiceModeData
+            merged = self._merge_panel_extractions(lte_parsed, nr_parsed)
+            if merged is not None:
+                try:
+                    validated = ServiceModeData(**merged)
+                    data = validated.model_dump()
+                    logger.debug("Panel-based SM extraction succeeded for %s", Path(image_path).name)
+                    return data
+                except Exception as exc:
+                    logger.warning("Panel merge validation failed for %s: %s — falling back to full image",
+                                   image_path, exc)
+
+        # Fallback: full-image extraction (original path)
         img_b64 = self._encode_image(image_path, max_dimension=max_dimension)
         parsed, attempt = self.client.chat_vision_json(img_b64, self._sm_prompt)
 
         if parsed is None:
             raise ValueError(f"Failed to extract JSON from service mode screenshot: {image_path}")
 
-        # Validate with Pydantic
         try:
             validated = ServiceModeData(**parsed)
             data = validated.model_dump()
@@ -256,8 +281,8 @@ class ScreenshotParser:
     def extract_speedtest(self, image_path: str | Path, max_dimension: int = 1024) -> dict[str, Any]:
         """Extract Speedtest results from a screenshot via VLM.
 
-        Encodes image as base64, sends to qwen3-vl:8b with the speedtest
-        prompt, validates JSON against SpeedtestData schema. Retries up to 3 times.
+        Splits image into results and details panels for focused extraction,
+        then merges and validates against SpeedtestData schema.
 
         Returns:
             Validated speedtest data dict.
@@ -265,6 +290,31 @@ class ScreenshotParser:
         Raises:
             ValueError: If all extraction attempts fail validation.
         """
+        # Try panel-based extraction first
+        try:
+            panels = split_panels(image_path, ST_LAYOUT)
+        except (FileNotFoundError, ValueError):
+            panels = {}
+
+        if panels and "results" in panels:
+            # Send the results panel (DL/UL speeds) for focused extraction
+            parsed, attempt = self.client.chat_vision_json(panels["results"], self._st_prompt)
+            if parsed is not None:
+                # Enrich with detail panel if available
+                if "details" in panels:
+                    detail_parsed, _ = self.client.chat_vision_json(panels["details"], self._st_prompt)
+                    if detail_parsed:
+                        parsed = self._merge_speedtest_panels(parsed, detail_parsed)
+                try:
+                    validated = SpeedtestData(**parsed)
+                    data = validated.model_dump()
+                    logger.debug("Panel-based ST extraction succeeded for %s", Path(image_path).name)
+                    return data
+                except Exception as exc:
+                    logger.warning("Panel ST validation failed for %s: %s — falling back",
+                                   image_path, exc)
+
+        # Fallback: full-image extraction
         img_b64 = self._encode_image(image_path, max_dimension=max_dimension)
         parsed, attempt = self.client.chat_vision_json(img_b64, self._st_prompt)
 
@@ -282,6 +332,86 @@ class ScreenshotParser:
             raise ValueError(
                 f"Speedtest schema validation failed for {image_path}: {exc}"
             ) from exc
+
+    # ------------------------------------------------------------------
+    # Panel extraction helpers
+    # ------------------------------------------------------------------
+
+    def _extract_panel(self, panel_b64: str, panel_type: str, image_path: str | Path) -> dict | None:
+        """Extract data from a single panel image.
+
+        Args:
+            panel_b64: Base64-encoded panel image.
+            panel_type: "lte" or "nr" — determines prompt focus.
+            image_path: Original image path (for logging).
+
+        Returns:
+            Parsed JSON dict or None on failure.
+        """
+        prompt = self._sm_prompt
+        if panel_type == "lte":
+            prompt += "\n\nFocus on LTE parameters only. Ignore NR fields if visible."
+        elif panel_type == "nr":
+            prompt += "\n\nFocus on NR/5G parameters only. Ignore LTE fields if visible."
+
+        parsed, attempt = self.client.chat_vision_json(panel_b64, prompt)
+        if parsed is None:
+            logger.debug("Panel %s extraction failed for %s", panel_type, Path(image_path).name)
+        return parsed
+
+    @staticmethod
+    def _merge_panel_extractions(lte_parsed: dict | None, nr_parsed: dict | None) -> dict | None:
+        """Merge LTE and NR panel extractions into a single ServiceModeData dict.
+
+        Returns None if both panels failed.
+        """
+        if lte_parsed is None and nr_parsed is None:
+            return None
+
+        merged: dict[str, Any] = {
+            "screenshot_type": "service_mode",
+        }
+
+        # Take LTE params from lte_parsed
+        if lte_parsed:
+            merged["lte_params"] = lte_parsed.get("lte_params") or lte_parsed
+            merged["technology"] = lte_parsed.get("technology")
+            merged["connection_mode"] = lte_parsed.get("connection_mode")
+            merged["timestamp"] = lte_parsed.get("timestamp")
+            merged["confidence"] = lte_parsed.get("confidence", 0.0)
+
+        # Take NR params from nr_parsed
+        if nr_parsed:
+            merged["nr_params"] = nr_parsed.get("nr_params") or nr_parsed
+            # Prefer NR connection mode if it indicates ENDC/NRDC
+            nr_mode = nr_parsed.get("connection_mode")
+            if nr_mode in ("ENDC", "NRDC", "NR_SA"):
+                merged["connection_mode"] = nr_mode
+            if not merged.get("timestamp"):
+                merged["timestamp"] = nr_parsed.get("timestamp")
+
+        # Clean up: if lte_params or nr_params is the full extraction dict, extract sub-dict
+        for key in ("lte_params", "nr_params"):
+            val = merged.get(key)
+            if isinstance(val, dict) and "screenshot_type" in val:
+                # This is a full extraction, not a sub-dict — extract the nested params
+                merged[key] = val.get(key)
+
+        return merged
+
+    @staticmethod
+    def _merge_speedtest_panels(results: dict, details: dict) -> dict:
+        """Merge results panel and details panel extractions for Speedtest.
+
+        Results panel provides DL/UL throughput; details provides ping/jitter/loss.
+        """
+        merged = dict(results)
+        # Fill in missing fields from details panel
+        for key in ("ping_idle_ms", "ping_dl_ms", "ping_ul_ms", "jitter_ms",
+                     "packet_loss_pct", "server_name", "isp"):
+            if merged.get(key) is None and details.get(key) is not None:
+                merged[key] = details[key]
+        return merged
 
     # ------------------------------------------------------------------
     # Connection mode detection

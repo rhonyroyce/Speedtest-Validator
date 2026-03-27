@@ -7,7 +7,7 @@ generates analysis via LLM (see config.yaml), and produces Output.xlsx + RF_Thro
 Usage:
     # Full site processing
         cd /home/k8s/Projects/Speedtest-Validator
-python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx --output-dir ./outputs
+python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
 
 
     # Dry run (2 screenshots only)
@@ -28,6 +28,7 @@ import yaml
 
 from .analysis_engine import AnalysisEngine
 from .ciq_reader import CIQReader
+from .extraction_validator import validate_extraction
 from .knowledge_engine import KnowledgeEngine
 from .ollama_client import OllamaClient
 from .output_xlsx import OutputXlsxGenerator
@@ -157,6 +158,24 @@ class DASValidator:
         failed = [r for r in extraction_results if r.get("status") == "EXTRACTION_FAILED"]
         if failed:
             logger.warning("%d pairs failed extraction and will be skipped in analysis", len(failed))
+
+        # ── Phase 2.5: Extraction Validation ─────────────────────────
+        logger.info("Phase 2.5: Extraction Validation")
+        for result in successful:
+            sm = result.get("service_mode")
+            st = result.get("speedtest")
+            if sm:
+                sm_validation = validate_extraction(sm)
+                if sm_validation["flags"]:
+                    logger.warning("SM validation flags for %s: %s",
+                                   result.get("cell_id", "?"), sm_validation["flags"])
+                result["sm_validation"] = sm_validation
+            if st:
+                st_validation = validate_extraction(st)
+                if st_validation["flags"]:
+                    logger.warning("ST validation flags for %s: %s",
+                                   result.get("cell_id", "?"), st_validation["flags"])
+                result["st_validation"] = st_validation
 
         # ── Phase 3: CIQ Correlation ────────────────────────────────
         logger.info("Phase 3: CIQ Correlation")
@@ -397,6 +416,28 @@ class DASValidator:
         file_handler.close()
 
 
+def _run_investigation(validator: DASValidator, question: str) -> None:
+    """Run optional agentic investigation on the first cell's data."""
+    from .investigate_engine import InvestigateEngine
+    from .knowledge.causal_dag import CausalDAG
+
+    logger.info("Running agentic investigation: %s", question)
+    try:
+        dag = CausalDAG(validator.config)
+        engine = InvestigateEngine(
+            validator.config, validator.ollama, dag, validator.threshold_engine,
+        )
+
+        # Use a sample cell_data dict (first successful extraction)
+        # The pipeline stores results internally; for investigation we build a minimal cell_data
+        cell_data = {"question_context": "Post-pipeline investigation"}
+        answer = engine.investigate(cell_data, question)
+        print(f"\n--- Investigation Result ---\n{answer}\n")
+    except Exception as exc:
+        logger.error("Investigation failed: %s", exc)
+        print(f"Investigation failed: {exc}")
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -444,6 +485,13 @@ def main() -> None:
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--investigate",
+        type=str,
+        default=None,
+        metavar="QUESTION",
+        help="Run agentic investigation on first cell (optional, not in core pipeline)",
+    )
 
     args = parser.parse_args()
 
@@ -474,6 +522,11 @@ def main() -> None:
             mode=args.mode,
             site_name=args.site_name,
         )
+
+        # Optional: agentic investigation (not in core pipeline)
+        if args.investigate:
+            _run_investigation(validator, args.investigate)
+
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)

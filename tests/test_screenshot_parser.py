@@ -379,11 +379,14 @@ class TestExtractionFailure:
 
     def test_successful_extraction_has_no_status(self, parser, mock_ollama, valid_image):
         """Successful extraction does not set EXTRACTION_FAILED status."""
+        sm_response = ({"screenshot_type": "service_mode", "connection_mode": "LTE_ONLY",
+              "lte_params": {"rsrp_dbm": -55.0}, "confidence": 0.9}, 1)
+        st_response = ({"screenshot_type": "speedtest", "dl_throughput_mbps": 200.0,
+              "ul_throughput_mbps": 40.0, "confidence": 0.9}, 1)
+        # Panel splitting makes extra VLM calls: 2 for SM (lte+nr panels), 2 for ST (results+details)
         mock_ollama.chat_vision_json.side_effect = [
-            ({"screenshot_type": "service_mode", "connection_mode": "LTE_ONLY",
-              "lte_params": {"rsrp_dbm": -55.0}, "confidence": 0.9}, 1),
-            ({"screenshot_type": "speedtest", "dl_throughput_mbps": 200.0,
-              "ul_throughput_mbps": 40.0, "confidence": 0.9}, 1),
+            sm_response, sm_response,  # SM lte_panel + nr_panel
+            st_response, st_response,  # ST results_panel + details_panel
         ]
 
         pairs = [{
