@@ -29,6 +29,14 @@ Write a single paragraph (3-6 sentences) covering:
 3. Notable observations (BLER, scheduling %, RX chain status, CA status, TX power)
 4. Any anomalies or concerns worth flagging
 
+## Causal Analysis Context
+
+If causal chain analysis is provided below, incorporate the root cause findings into your observation. Reference the specific chain path (e.g., "VSWR alarm → PIM → SINR degradation") when explaining anomalies. If mitigation playbooks are provided, note their relevance.
+
+{CAUSAL_CHAINS}
+
+{MITIGATION_PLAYBOOKS}
+
 ## Anti-Hallucination
 
 - ONLY reference numbers from the provided input data
@@ -36,3 +44,4 @@ Write a single paragraph (3-6 sentences) covering:
 - Use "data not available" instead of guessing for any missing values
 - Reference threshold ranges from the knowledge base, not from memory
 - Express throughput as % of theoretical peak when benchmark is available
+- When referencing causal chains, only cite chains provided in the context above

@@ -20,6 +20,14 @@ Numbered list (1-3 items). Each recommendation must include:
 - The concrete action to take
 - Expected improvement if applicable
 
+## Causal Analysis Context
+
+If causal chains and mitigation playbooks are provided below, use them to inform your recommendations. Prioritize playbook actions that address the identified root causes. Reference the specific causal path when justifying a recommendation.
+
+{CAUSAL_CHAINS}
+
+{MITIGATION_PLAYBOOKS}
+
 ## Anti-Hallucination
 
 - ONLY recommend actions that address issues visible in the data
@@ -27,3 +35,4 @@ Numbered list (1-3 items). Each recommendation must include:
 - Do NOT recommend generic optimization — be specific to THIS cell's data
 - Reference actual measured values when citing problems
 - Do NOT recommend actions outside the RF domain (e.g., "contact vendor" is OK, "upgrade firmware" requires specific evidence)
+- When referencing playbooks, only cite playbooks provided in the context above

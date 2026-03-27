@@ -14,6 +14,7 @@ import logging
 import os
 import re
 
+from .knowledge.causal_dag import CausalDAG
 from .utils.text_utils import (
     strip_thinking_tags,
     strip_markdown_fences,
@@ -79,6 +80,25 @@ class AnalysisEngine:
         # Enrich context with CIQ config and threshold results
         context["ciq_config"] = ciq_config
         context["threshold_result"] = threshold_result
+
+        # 1b. Causal DAG analysis — root cause chains and playbooks
+        try:
+            dag = CausalDAG(self.config)
+            measurements = {**cell_data, **threshold_result}
+            activated = dag.activate_from_measurements(measurements)
+            if activated:
+                chains = dag.trace_root_causes(activated)
+                chains = dag.deduplicate_impacts(chains)
+                playbooks = dag.get_matching_playbooks(activated)
+                context["causal_chains"] = dag.format_for_llm(chains)
+                context["mitigation_playbooks"] = playbooks
+            else:
+                context["causal_chains"] = "No causal chains identified — all measurements within normal range."
+                context["mitigation_playbooks"] = []
+        except Exception:
+            logger.exception("Causal DAG analysis failed — continuing without it")
+            context["causal_chains"] = ""
+            context["mitigation_playbooks"] = []
 
         # 2. Generate all three analysis outputs
         observations = self._retry_on_failure(
@@ -267,6 +287,20 @@ class AnalysisEngine:
             lines.append("\n### CIQ Configuration")
             for key, val in ciq.items():
                 lines.append(f"- {key}: {val}")
+
+        # Causal chains
+        causal = context.get("causal_chains")
+        if causal:
+            lines.append(f"\n{causal}")
+
+        # Mitigation playbooks
+        playbooks = context.get("mitigation_playbooks")
+        if playbooks:
+            lines.append("\n### Mitigation Playbooks")
+            for pb in playbooks:
+                lines.append(f"\n**{pb.get('title', 'Playbook')}** (Severity: {pb.get('severity', 'N/A')})")
+                for action in pb.get("field_actions", []):
+                    lines.append(f"  - {action}")
 
         return "\n".join(lines)
 
