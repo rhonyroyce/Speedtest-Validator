@@ -14,7 +14,7 @@ from code.ciq_reader import CIQReader
 from code.utils.excel_utils import convert_bw_khz_to_mhz
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
-CIQ_PATH = Path(__file__).resolve().parent.parent / "input" / "SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx"
+CIQ_PATH = Path(__file__).resolve().parent.parent / "input" / "SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx"
 
 
 @pytest.fixture

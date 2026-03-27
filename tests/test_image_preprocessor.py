@@ -49,9 +49,10 @@ class TestSplitPanels:
             assert img.width > 0 and img.height > 0
 
     def test_split_panels_upscale(self, dummy_image_path):
-        """2x upscaled panels should be larger than 1x panels."""
-        panels_1x = split_panels(dummy_image_path, SM_LAYOUT, upscale_factor=1)
-        panels_2x = split_panels(dummy_image_path, SM_LAYOUT, upscale_factor=2)
+        """2x upscaled panels should be larger than 1x panels (when max_dimension is uncapped)."""
+        # Disable max_dimension cap to test pure upscale behavior
+        panels_1x = split_panels(dummy_image_path, SM_LAYOUT, upscale_factor=1, max_dimension=0)
+        panels_2x = split_panels(dummy_image_path, SM_LAYOUT, upscale_factor=2, max_dimension=0)
 
         # Compare the lte_params panel sizes
         img_1x = Image.open(io.BytesIO(base64.b64decode(panels_1x["lte_params"])))
@@ -59,3 +60,9 @@ class TestSplitPanels:
 
         assert img_2x.width == img_1x.width * 2
         assert img_2x.height == img_1x.height * 2
+
+    def test_split_panels_respects_max_dimension(self, dummy_image_path):
+        """Panels should be capped at max_dimension after upscale."""
+        panels = split_panels(dummy_image_path, SM_LAYOUT, upscale_factor=2, max_dimension=512)
+        img = Image.open(io.BytesIO(base64.b64decode(panels["lte_params"])))
+        assert max(img.size) <= 512

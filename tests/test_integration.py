@@ -83,7 +83,7 @@ def test_full_pipeline_dry_run(mock_ollama, tmp_path):
     validator = DASValidator(config_path="config.yaml")
     validator.run(
         site_folder="./input/SFY0803A",
-        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx",
+        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx",
         output_dir=str(tmp_path),
         dry_run=True,
         mode="fast",
@@ -104,7 +104,7 @@ def test_full_pipeline_full_mode(mock_ollama, tmp_path):
     validator = DASValidator(config_path="config.yaml")
     validator.run(
         site_folder="./input/SFY0803A",
-        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx",
+        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx",
         output_dir=str(tmp_path),
         dry_run=True,
         mode="full",
@@ -126,7 +126,7 @@ def test_connection_mode_propagation(mock_ollama, tmp_path):
     validator = DASValidator(config_path="config.yaml")
     validator.run(
         site_folder="./input/SFY0803A",
-        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx",
+        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx",
         output_dir=str(tmp_path),
         dry_run=True,
         mode="fast",
@@ -179,7 +179,7 @@ def test_output_column_names(mock_ollama, tmp_path):
     validator = DASValidator(config_path="config.yaml")
     validator.run(
         site_folder="./input/SFY0803A",
-        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx",
+        ciq_path="./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx",
         output_dir=str(tmp_path),
         dry_run=True,
         mode="full",

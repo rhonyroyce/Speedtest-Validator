@@ -15,7 +15,7 @@ ollama:
 
 paths:
   # Reference documents (in input/ directory)
-  ciq_excel: "./input/SFY0803A_MMBB_CIQ_EXPORT_20251118_173752.xlsx"
+  ciq_excel: "./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx"
   threshold_excel: "./input/DAS_Validation_Thresholds.xlsx"
   rag_docx: "./input/RF_Throughput_Analysis_Universal_RAG.docx"
   kpi_excel: "./input/MS2_KPI_and_Counters.xlsx"

@@ -48,6 +48,7 @@ def split_panels(
     image_path: str | Path,
     layout: dict[str, tuple[float, float, float, float]],
     upscale_factor: int = 2,
+    max_dimension: int = 1024,
     jpeg_quality: int = 90,
 ) -> dict[str, str]:
     """Split an image into panels and return base64-encoded JPEGs.
@@ -56,6 +57,7 @@ def split_panels(
         image_path: Path to the screenshot image file.
         layout: Panel layout dict mapping panel names to fractional (x1, y1, x2, y2).
         upscale_factor: Upscale multiplier for cropped panels (default 2x).
+        max_dimension: Cap longest edge after upscale (default 1024px, matches VLM input).
         jpeg_quality: JPEG compression quality (default 90).
 
     Returns:
@@ -100,11 +102,14 @@ def split_panels(
 
         cropped = img.crop((x1, y1, x2, y2))
 
-        # Upscale for better OCR
+        # Upscale for better OCR, then cap to max_dimension for VLM
         if upscale_factor > 1:
             new_w = cropped.width * upscale_factor
             new_h = cropped.height * upscale_factor
             cropped = cropped.resize((new_w, new_h), Image.LANCZOS)
+
+        if max_dimension and max(cropped.size) > max_dimension:
+            cropped.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
 
         # Encode to base64 JPEG
         buffer = io.BytesIO()
