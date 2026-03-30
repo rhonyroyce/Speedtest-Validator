@@ -78,48 +78,60 @@ class ThresholdEngine:
         # RSRP
         rsrp_t = thresholds["rsrp"]
         rsrp_min, rsrp_max = rsrp_t["min"], rsrp_t["max"]
-        results["rsrp"] = {
-            "value": rsrp,
-            "min": rsrp_min,
-            "max": rsrp_max,
-            "pass_fail": "PASS" if rsrp_min <= rsrp <= rsrp_max else "FAIL",
-            "delta": round(rsrp - rsrp_min, 2) if rsrp < rsrp_min else (
-                round(rsrp - rsrp_max, 2) if rsrp > rsrp_max else 0
-            ),
-        }
+        if rsrp is not None:
+            results["rsrp"] = {
+                "value": rsrp,
+                "min": rsrp_min,
+                "max": rsrp_max,
+                "pass_fail": "PASS" if rsrp_min <= rsrp <= rsrp_max else "FAIL",
+                "delta": round(rsrp - rsrp_min, 2) if rsrp < rsrp_min else (
+                    round(rsrp - rsrp_max, 2) if rsrp > rsrp_max else 0
+                ),
+            }
+        else:
+            results["rsrp"] = {"value": None, "min": rsrp_min, "max": rsrp_max, "pass_fail": "N/A", "delta": 0}
 
         # SINR
         sinr_t = thresholds["sinr"]
         sinr_min = sinr_t["min"]
-        results["sinr"] = {
-            "value": sinr,
-            "min": sinr_min,
-            "max": None,
-            "pass_fail": "PASS" if sinr >= sinr_min else "FAIL",
-            "delta": round(sinr - sinr_min, 2),
-        }
+        if sinr is not None:
+            results["sinr"] = {
+                "value": sinr,
+                "min": sinr_min,
+                "max": None,
+                "pass_fail": "PASS" if sinr >= sinr_min else "FAIL",
+                "delta": round(sinr - sinr_min, 2),
+            }
+        else:
+            results["sinr"] = {"value": None, "min": sinr_min, "max": None, "pass_fail": "N/A", "delta": 0}
 
         # RSRQ
         rsrq_t = thresholds["rsrq"]
         rsrq_min, rsrq_max = rsrq_t["min"], rsrq_t["max"]
-        results["rsrq"] = {
-            "value": rsrq,
-            "min": rsrq_min,
-            "max": rsrq_max,
-            "pass_fail": "PASS" if rsrq_min <= rsrq <= rsrq_max else "FAIL",
-            "delta": round(rsrq - rsrq_min, 2) if rsrq < rsrq_min else (
-                round(rsrq - rsrq_max, 2) if rsrq > rsrq_max else 0
-            ),
-        }
+        if rsrq is not None:
+            results["rsrq"] = {
+                "value": rsrq,
+                "min": rsrq_min,
+                "max": rsrq_max,
+                "pass_fail": "PASS" if rsrq_min <= rsrq <= rsrq_max else "FAIL",
+                "delta": round(rsrq - rsrq_min, 2) if rsrq < rsrq_min else (
+                    round(rsrq - rsrq_max, 2) if rsrq > rsrq_max else 0
+                ),
+            }
+        else:
+            results["rsrq"] = {"value": None, "min": rsrq_min, "max": rsrq_max, "pass_fail": "N/A", "delta": 0}
 
         # TX Power — must always be negative
-        results["tx_power"] = {
-            "value": tx_power,
-            "min": None,
-            "max": 0,
-            "pass_fail": "PASS" if tx_power < 0 else "FAIL",
-            "delta": round(tx_power, 2),
-        }
+        if tx_power is not None:
+            results["tx_power"] = {
+                "value": tx_power,
+                "min": None,
+                "max": 0,
+                "pass_fail": "PASS" if tx_power < 0 else "FAIL",
+                "delta": round(tx_power, 2),
+            }
+        else:
+            results["tx_power"] = {"value": None, "min": None, "max": 0, "pass_fail": "N/A", "delta": 0}
 
         return results
 

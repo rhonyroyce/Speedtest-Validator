@@ -1,22 +1,37 @@
 ---
-version: "1.0"
+version: "2.0"
 model: qwen2.5vl:7b
 temperature: 0.15
 output_format: json
-accuracy_target: 0.85
+accuracy_target: 0.90
 ---
 
-# Speedtest Screenshot Extraction Prompt
+Extract speed test results from this Ookla Speedtest screenshot.
 
-## System Prompt
+## Layout Guide
 
-You are an expert RF engineer extracting speed test results from an Ookla Speedtest screenshot on a T-Mobile DAS site. Extract the DL/UL throughput and latency values precisely. If a value is not visible, return null — NEVER invent values.
+The Ookla Speedtest results screen has this layout:
 
-## Extraction Schema
+- **DOWNLOAD Mbps** — large number on the left (e.g. 68.9, 598, 773)
+- **UPLOAD Mbps** — large number on the right (e.g. 18.3, 79.1, 77.5)
+- **PING ms** section below with three columns:
+  - Idle (leftmost number)
+  - Download (middle number)
+  - Upload (rightmost number)
+- **Jitter** — small number below each ping column
+- **Packet Loss %** — number at the bottom (e.g. 0.0)
 
-Return ONLY valid JSON matching this exact structure:
+## Reading Rules
 
-```json
+- DL is ALWAYS the left/first large number, UL is ALWAYS the right/second
+- Read the EXACT number shown — do not round
+- DL range: 0 to 3000 Mbps
+- UL range: 0 to 500 Mbps
+- Ping range: 1 to 1000 ms
+- If "RESULTS" header is visible at top, these are final results
+
+## Output JSON
+
 {
   "screenshot_type": "speedtest",
   "dl_throughput_mbps": null,
@@ -29,27 +44,9 @@ Return ONLY valid JSON matching this exact structure:
   "server_name": null,
   "isp": null,
   "timestamp": null,
-  "confidence": 0.0
+  "confidence": 0.9
 }
-```
 
-## Validation Rules
-
-- DL throughput: 0 to 3000 Mbps (NR-DC can exceed 2 Gbps)
-- UL throughput: 0 to 500 Mbps
-- Ping: 1 to 1000 ms
-- Jitter: 0 to 500 ms
-- Packet loss: 0 to 100%
-
-## Anti-Hallucination
-
-- Output ONLY values visible in the screenshot
-- Read the EXACT number shown — do not round or estimate
-- The large number at top-left is DL, top-right is UL
-- Ping/Jitter/Packet Loss are shown in smaller text below the main numbers
-- If "Detailed Result" or "Test Again" buttons are visible, results are final
-- Do NOT confuse DL and UL — DL is always listed first (left)
-
-CRITICAL: Your entire response must be ONLY the JSON object. No explanation, no markdown code fences, no text before or after. Start with { and end with }.
+Return ONLY the JSON. No explanation. Start with { and end with }.
 
 /no_think

@@ -9,6 +9,7 @@ Usage:
         cd /home/k8s/Projects/Speedtest-Validator
 python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
 
+python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
 
     # Dry run (2 screenshots only)
     python -m code.main --site-folder ./SFY0803A \\
@@ -225,10 +226,10 @@ class DASValidator:
             tx_power = lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm")
 
             sm_result = self.threshold_engine.check_service_mode(
-                rsrp=float(rsrp) if rsrp is not None else 0.0,
-                sinr=float(sinr) if sinr is not None else 0.0,
-                rsrq=float(rsrq) if rsrq is not None else 0.0,
-                tx_power=float(tx_power) if tx_power is not None else 0.0,
+                rsrp=float(rsrp) if rsrp is not None else None,
+                sinr=float(sinr) if sinr is not None else None,
+                rsrq=float(rsrq) if rsrq is not None else None,
+                tx_power=float(tx_power) if tx_power is not None else None,
                 end_type="antenna_end",
             )
 

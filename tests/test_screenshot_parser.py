@@ -53,6 +53,7 @@ def parser(mock_config, mock_ollama):
         p = ScreenshotParser.__new__(ScreenshotParser)
         p.config = mock_config
         p.client = mock_ollama
+        p._max_dim = 768
         prompts_dir = Path(__file__).resolve().parent.parent / "code" / "prompts"
         p._sm_prompt = (prompts_dir / "service_mode_extraction.md").read_text()
         p._st_prompt = (prompts_dir / "speedtest_extraction.md").read_text()

@@ -12,7 +12,7 @@ ollama:
   max_retries: 2                       # One retry with "Output ONLY valid JSON" reinforcement
   extraction_temperature: 0.15         # Low temp for deterministic extraction
   num_predict: 2048                    # Cap response tokens — room for JSON even if thinking leaks
-  max_image_dimension: 768             # Smaller images = faster inference
+  max_image_dimension: 1280            # Higher res = better OCR accuracy (PCI, BW)
   analysis_temperature: 0.3            # Slightly higher for narrative generation
 
 paths:

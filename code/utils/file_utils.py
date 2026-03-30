@@ -43,6 +43,15 @@ FILENAME_TECH_MAP = {
     "B66": {"tech": "LTE", "band": "B66"},
     "B19": {"tech": "LTE", "band": "B19"},
     "B21": {"tech": "LTE", "band": "B21"},
+    # Freq-based naming from filenames (e.g. 07_L1900_...)
+    "L1900": {"tech": "LTE", "band": "L19"},
+    "L2100": {"tech": "LTE", "band": "L21"},
+    "N1900": {"tech": "NR", "band": "N19"},
+    # Multi-part tech from filenames (e.g. 13_N2500_C1_NSA_...)
+    "N2500_C1_NSA": {"tech": "NR", "band": "n25_C1", "mode": "NSA"},
+    "N2500_C1_SA": {"tech": "NR", "band": "n25_C1", "mode": "SA"},
+    "N2500_C2_NSA": {"tech": "NR", "band": "n25_C2", "mode": "NSA"},
+    "N2500_C2_SA": {"tech": "NR", "band": "n25_C2", "mode": "SA"},
 }
 
 _SECTOR_RE = re.compile(r"[Ss][Ee][Cc][Tt][Oo][Rr]\s*(\d+)", re.IGNORECASE)
@@ -102,6 +111,8 @@ def parse_screenshot_filename(filename: str) -> dict | None:
         return None
 
     # Split remaining: cell_id_tech_YYYYMMDD_HHMMSS
+    # cell_id is always the leading numeric part(s), tech is everything between
+    # cell_id and the date/time suffix.
     parts = remainder.split("_")
     if len(parts) < 4:
         logger.debug("Not enough parts in filename: %s", filename)
@@ -109,8 +120,20 @@ def parse_screenshot_filename(filename: str) -> dict | None:
 
     time_str = parts[-1]
     date_str = parts[-2]
-    tech = parts[-3]
-    cell_id = "_".join(parts[:-3])
+
+    # Split cell_id from tech in the prefix (everything before date_time).
+    # Numeric-only first token (e.g. '13') → cell_id is just that, rest is tech.
+    # Alphanumeric first token (e.g. 'CELL01') → tech is last token, cell_id is rest.
+    prefix_parts = parts[:-2]  # everything before date_time
+    if prefix_parts[0].isdigit():
+        # e.g. ['13', 'N2500', 'C1', 'NSA'] → cell_id='13', tech='N2500_C1_NSA'
+        # e.g. ['07', 'L1900'] → cell_id='07', tech='L1900'
+        cell_id = prefix_parts[0]
+        tech = "_".join(prefix_parts[1:]) if len(prefix_parts) > 1 else ""
+    else:
+        # e.g. ['CELL01', 'LTE'] → cell_id='CELL01', tech='LTE'
+        tech = prefix_parts[-1] if len(prefix_parts) > 1 else ""
+        cell_id = "_".join(prefix_parts[:-1]) if len(prefix_parts) > 1 else prefix_parts[0]
 
     try:
         dt = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
@@ -174,11 +197,13 @@ def discover_screenshots(
                 tech_info = TECH_SUBFOLDER_PATTERNS[parent_name]
             elif parsed.get("tech"):
                 # Fallback: infer tech from filename token when not in a tech subfolder
-                tech_token = parsed["tech"].upper()
-                fallback = FILENAME_TECH_MAP.get(tech_token)
+                tech_token = parsed["tech"]
+                fallback = FILENAME_TECH_MAP.get(tech_token) or FILENAME_TECH_MAP.get(tech_token.upper())
                 if fallback:
                     tech_info = fallback
-                    logger.debug("Inferred tech from filename token '%s': %s", parsed["tech"], fallback)
+                    # Use filename tech as subfolder display name (e.g. "L1900", "N2500_C1_NSA")
+                    tech_subfolder = tech_token
+                    logger.debug("Inferred tech from filename token '%s': %s", tech_token, fallback)
 
             results.append({
                 "path": jpg,
