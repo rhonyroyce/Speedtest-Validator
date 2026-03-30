@@ -23,7 +23,7 @@ class OllamaClient:
     def __init__(self, config: dict):
         ollama_cfg = config.get("ollama", {})
         self.base_url = ollama_cfg.get("base_url", "http://localhost:11434").rstrip("/")
-        self.vision_model = ollama_cfg.get("vision_model", "qwen2.5-vl:7b")
+        self.vision_model = ollama_cfg.get("vision_model", "minicpm-v:8b")
         self.analysis_model = ollama_cfg.get("analysis_model", "gpt-oss:20b")
         self.max_retries = ollama_cfg.get("max_retries", 3)
         self.extraction_temperature = ollama_cfg.get("extraction_temperature", 0.15)

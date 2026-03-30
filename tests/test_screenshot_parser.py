@@ -32,7 +32,7 @@ def mock_config():
     return {
         "ollama": {
             "base_url": "http://localhost:11434",
-            "vision_model": "qwen3-vl:8b",
+            "vision_model": "minicpm-v:8b",
             "analysis_model": "gpt-oss:20b",
             "max_retries": 3,
             "extraction_temperature": 0.15,
