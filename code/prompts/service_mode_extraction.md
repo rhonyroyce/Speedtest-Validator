@@ -65,7 +65,7 @@ Look at "Serving PLMN" line AND which params have actual numeric values:
 
 {
   "screenshot_type": "service_mode",
-  "connection_mode": "LTE_ONLY|NR_SA|ENDC|NRDC",
+  "connection_mode": "LTE_ONLY",
   "lte_params": {
     "band": null, "bandwidth_mhz": null, "earfcn": null, "pci": null,
     "rsrp_dbm": null, "rsrq_db": null, "sinr_db": null, "tx_power_dbm": null,

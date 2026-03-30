@@ -295,9 +295,9 @@ class TestSchemaValidation:
         assert data.connection_mode == "ENDC"
 
     def test_service_mode_invalid_connection_mode(self):
-        """Invalid connection_mode rejected by Pydantic."""
-        with pytest.raises(ValueError):
-            ServiceModeData(connection_mode="INVALID_MODE")
+        """Invalid connection_mode coerced to None (rule-based detection overrides)."""
+        data = ServiceModeData(connection_mode="INVALID_MODE")
+        assert data.connection_mode is None
 
     def test_speedtest_valid(self):
         """Valid speedtest data passes Pydantic validation."""

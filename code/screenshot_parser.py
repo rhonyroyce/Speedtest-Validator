@@ -110,6 +110,12 @@ class LTEParams(BaseModel):
     mimo_configured: str | None = None
     upperlayer_ind_r15: str | None = None
     dcnr_restriction: str | None = None
+
+    @field_validator("dcnr_restriction", "mimo_configured", "upperlayer_ind_r15", mode="before")
+    @classmethod
+    def coerce_str_fields(cls, v: Any) -> str | None:
+        """Coerce bool/int to str — VLM returns False instead of 'FALSE'."""
+        return str(v) if v is not None else None
     ca_status: str | None = None
     ul_ca_status: str | None = None
 
@@ -128,10 +134,6 @@ class LTEParams(BaseModel):
     def coerce_float_fields(cls, v: Any) -> float | None:
         return _safe_float(v)
 
-    @field_validator("mimo_configured", mode="before")
-    @classmethod
-    def coerce_mimo_to_str(cls, v: Any) -> str | None:
-        return str(v) if v is not None else None
 
 
 class NRParams(BaseModel):
@@ -184,14 +186,18 @@ class ServiceModeData(BaseModel):
     timestamp: str | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
-    @field_validator("connection_mode")
+    @field_validator("connection_mode", mode="before")
     @classmethod
     def validate_connection_mode(cls, v: str | None) -> str | None:
-        if v is not None:
-            allowed = {"LTE_ONLY", "NR_SA", "ENDC", "NRDC"}
-            if v not in allowed:
-                raise ValueError(f"connection_mode must be one of {allowed}, got '{v}'")
-        return v
+        if v is None:
+            return None
+        allowed = {"LTE_ONLY", "NR_SA", "ENDC", "NRDC"}
+        v = str(v).strip()
+        if v in allowed:
+            return v
+        # VLM sometimes returns the template literal "LTE_ONLY|NR_SA|ENDC|NRDC"
+        # or partial like "LTE_ONLY|NR_SA" — default to None, let detect_connection_mode fix it
+        return None
 
 
 class SpeedtestData(BaseModel):
