@@ -229,6 +229,7 @@ class ScreenshotParser:
         prompts_dir = Path(__file__).parent / "prompts"
         self._sm_prompt = (prompts_dir / "service_mode_extraction.md").read_text()
         self._st_prompt = (prompts_dir / "speedtest_extraction.md").read_text()
+        self._nr_prompt = (prompts_dir / "nr_focused_extraction.md").read_text()
 
     # ------------------------------------------------------------------
     # Image encoding
@@ -288,11 +289,20 @@ class ScreenshotParser:
             if attempt > 1:
                 logger.warning("Service mode extraction required %d attempts: %s",
                                attempt, image_path)
-            return data
         except Exception as exc:
             raise ValueError(
                 f"Service mode schema validation failed for {image_path}: {exc}"
             ) from exc
+
+        # NR backfill: if LTE params present but NR params all null, try focused NR extraction
+        # This catches dense EN-DC screenshots where VLM focuses on LTE and misses NR
+        if self._needs_nr_backfill(data):
+            logger.debug("NR backfill triggered for %s", Path(image_path).name)
+            nr_data = self._extract_nr_focused(img_b64, image_path)
+            if nr_data:
+                data["nr_params"] = nr_data
+
+        return data
 
     def extract_speedtest(self, image_path: str | Path, max_dimension: int | None = None) -> dict[str, Any]:
         """Extract Speedtest results from a screenshot via VLM.
@@ -322,6 +332,37 @@ class ScreenshotParser:
             raise ValueError(
                 f"Speedtest schema validation failed for {image_path}: {exc}"
             ) from exc
+
+    # ------------------------------------------------------------------
+    # NR backfill for dense EN-DC screenshots
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _needs_nr_backfill(data: dict) -> bool:
+        """Check if LTE is populated but NR is empty — indicates missed NR on ENDC."""
+        lte = data.get("lte_params") or {}
+        nr = data.get("nr_params") or {}
+        has_lte = any(lte.get(k) is not None for k in ("band", "earfcn", "rsrp_dbm"))
+        has_nr = any(nr.get(k) is not None for k in ("nr_band", "nr_arfcn", "nr5g_rsrp_dbm", "nr_pci"))
+        # Also check if dcnr_restriction=FALSE or NR-related hints suggest ENDC
+        dcnr = str(lte.get("dcnr_restriction") or "").upper()
+        expects_nr = dcnr == "FALSE" or has_lte
+        return has_lte and not has_nr and expects_nr
+
+    def _extract_nr_focused(self, img_b64: str, image_path: str | Path) -> dict | None:
+        """Send full image with NR-only focused prompt. Returns NR params dict or None."""
+        parsed, attempt = self.client.chat_vision_json(img_b64, self._nr_prompt)
+        if parsed is None:
+            logger.debug("NR focused extraction failed for %s", Path(image_path).name)
+            return None
+        try:
+            validated = NRParams(**parsed)
+            result = validated.model_dump()
+            logger.info("NR backfill succeeded for %s", Path(image_path).name)
+            return result
+        except Exception as exc:
+            logger.debug("NR backfill validation failed for %s: %s", Path(image_path).name, exc)
+            return None
 
     # ------------------------------------------------------------------
     # Panel extraction helpers

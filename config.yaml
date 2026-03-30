@@ -4,7 +4,7 @@
 
 ollama:
   base_url: "http://localhost:11434"
-  vision_model: "minicpm-v:8b"          # ~5GB VRAM — screenshot OCR/extraction
+  vision_model: "qwen2.5vl:7b"          # ~5GB VRAM — screenshot OCR/extraction (best accuracy+speed)
   analysis_model: "gpt-oss:20b"       # ~12GB VRAM — observations, recommendations, KPI impact
   vram_gb: 16                          # Total GPU VRAM — cannot run both models simultaneously
   unload_before_switch: true           # MUST unload one model before loading the other

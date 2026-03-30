@@ -57,6 +57,7 @@ def parser(mock_config, mock_ollama):
         prompts_dir = Path(__file__).resolve().parent.parent / "code" / "prompts"
         p._sm_prompt = (prompts_dir / "service_mode_extraction.md").read_text()
         p._st_prompt = (prompts_dir / "speedtest_extraction.md").read_text()
+        p._nr_prompt = (prompts_dir / "nr_focused_extraction.md").read_text()
         return p
 
 
