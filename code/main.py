@@ -11,6 +11,8 @@ python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_C
 
 python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
 
+python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
+
     # Dry run (2 screenshots only)
     python -m code.main --site-folder ./SFY0803A \\
         --ciq ./SFY0803A_MMBB_CIQ_EXPORT_*.xlsx \\
@@ -74,6 +76,19 @@ class DASValidator:
         self.output_xlsx = OutputXlsxGenerator(self.config)
 
         logger.info("DASValidator initialized with config: %s", config_path)
+
+    @staticmethod
+    def _pick_rf_value(conn_mode: str, lte_val, nr_val):
+        """Pick the right RF value based on connection mode.
+
+        - NR SA: use NR value (no LTE anchor)
+        - EN-DC: prefer LTE for anchor params, but use whichever is available
+        - LTE Only: use LTE value
+        """
+        if conn_mode == "NR SA":
+            return nr_val if nr_val is not None else lte_val or ""
+        # LTE Only or EN-DC: prefer LTE, fall back to NR
+        return lte_val if lte_val is not None else nr_val or ""
 
     def run(
         self,
@@ -236,29 +251,38 @@ class DASValidator:
             # Speed test check — 5-dimensional lookup
             conn_mode = _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only")
 
-            # Determine BW components for lookup
-            bw_lte = int(result.get("bandwidth_mhz", 0)) if lte else 0
-            bw_nr_c1 = int(nr.get("nr_bandwidth_mhz") or 0)
-            bw_nr_c2 = int(nr.get("bandwidth_c2_mhz") or 0)
-
-            # If we have CIQ data for NR bandwidth, prefer that
+            # Determine BW components — CIQ is source of truth, VLM is fallback
             ciq = result.get("ciq", {})
             is_nr_cell = "gUtranCell" in ciq or str(ciq.get("radioType", "")).upper().startswith("NR")
+            ciq_bw = int(result.get("bandwidth_mhz", 0))
+
             if is_nr_cell:
-                bw_nr_c1 = int(result.get("bandwidth_mhz", 0))
-                if conn_mode in ("EN-DC",):
-                    # EN-DC needs both LTE and NR BW — look up LTE from CIQ
+                # CIQ matched as NR cell — use CIQ BW for NR
+                bw_nr_c1 = ciq_bw or int(nr.get("nr_bandwidth_mhz") or 0)
+                bw_nr_c2 = int(nr.get("bandwidth_c2_mhz") or 0)
+                # Look up LTE BW separately from CIQ if EN-DC
+                bw_lte = 0
+                if conn_mode == "EN-DC":
                     lte_earfcn = lte.get("earfcn")
                     if lte_earfcn:
                         lte_match = self.ciq_reader.match_cell(earfcn=int(lte_earfcn))
                         if lte_match:
                             bw_lte = int(self.ciq_reader.get_bandwidth_mhz(lte_match))
-                        else:
-                            bw_lte = 0
-                    else:
-                        bw_lte = 0
-                else:
-                    bw_lte = 0
+            else:
+                # CIQ matched as LTE cell (or no match)
+                bw_lte = ciq_bw or int(lte.get("bandwidth_mhz") or 0)
+                # NR BW: try CIQ lookup by ARFCN, fall back to VLM
+                bw_nr_c1 = int(nr.get("nr_bandwidth_mhz") or 0)
+                nr_arfcn = nr.get("nr_arfcn")
+                nr_pci = nr.get("nr_pci")
+                if nr_arfcn or nr_pci:
+                    nr_match = self.ciq_reader.match_cell(
+                        arfcn=int(nr_arfcn) if nr_arfcn else None,
+                        pci=int(nr_pci) if nr_pci else None,
+                    )
+                    if nr_match:
+                        bw_nr_c1 = int(self.ciq_reader.get_bandwidth_mhz(nr_match)) or bw_nr_c1
+                bw_nr_c2 = int(nr.get("bandwidth_c2_mhz") or 0)
 
             # Infer connection mode from BW data when VLM defaults to LTE Only
             original_mode = conn_mode
@@ -377,16 +401,17 @@ class DASValidator:
             else:
                 bandwidth = f"LTE {bw_lte}"
 
+            conn_mode_str = result.get("inferred_conn_mode", _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only"))
             row = {
                 "bts": site_id,
                 "tech_sector": f"SECTOR {result.get('sector', '?')} / {result.get('tech_subfolder') or (result.get('tech_info') or {}).get('band', 'Unknown')}",
-                "connection_mode": result.get("inferred_conn_mode", _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only")),
+                "connection_mode": conn_mode_str,
                 "bandwidth": bandwidth,
-                "pci": lte.get("pci") or nr.get("nr_pci") or "",
-                "rsrp": lte.get("rsrp_dbm") or nr.get("nr5g_rsrp_dbm") or "",
-                "rsrq": lte.get("rsrq_db") or nr.get("nr5g_rsrq_db") or "",
-                "sinr": lte.get("sinr_db") or nr.get("nr5g_sinr_db") or "",
-                "tx_power": lte.get("tx_power_dbm") or nr.get("nr_tx_power_dbm") or "",
+                "pci": self._pick_rf_value(conn_mode_str, lte.get("pci"), nr.get("nr_pci")),
+                "rsrp": self._pick_rf_value(conn_mode_str, lte.get("rsrp_dbm"), nr.get("nr5g_rsrp_dbm")),
+                "rsrq": self._pick_rf_value(conn_mode_str, lte.get("rsrq_db"), nr.get("nr5g_rsrq_db")),
+                "sinr": self._pick_rf_value(conn_mode_str, lte.get("sinr_db"), nr.get("nr5g_sinr_db")),
+                "tx_power": self._pick_rf_value(conn_mode_str, lte.get("tx_power_dbm"), nr.get("nr_tx_power_dbm")),
                 "sm_st_duration": result.get("duration_sec", ""),
                 "dl_throughput": st.get("dl_throughput_mbps") or "",
                 "ul_throughput": st.get("ul_throughput_mbps") or "",
