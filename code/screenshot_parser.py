@@ -339,15 +339,16 @@ class ScreenshotParser:
 
     @staticmethod
     def _needs_nr_backfill(data: dict) -> bool:
-        """Check if LTE is populated but NR is empty — indicates missed NR on ENDC."""
-        lte = data.get("lte_params") or {}
+        """Check if NR params are missing — triggers focused NR extraction.
+
+        Fires for:
+        - EN-DC: LTE present but NR empty (VLM focused on LTE section)
+        - NR SA: both LTE and NR empty (VLM failed to extract NR-only screenshot)
+        Skips only when NR params are already populated.
+        """
         nr = data.get("nr_params") or {}
-        has_lte = any(lte.get(k) is not None for k in ("band", "earfcn", "rsrp_dbm"))
         has_nr = any(nr.get(k) is not None for k in ("nr_band", "nr_arfcn", "nr5g_rsrp_dbm", "nr_pci"))
-        # Also check if dcnr_restriction=FALSE or NR-related hints suggest ENDC
-        dcnr = str(lte.get("dcnr_restriction") or "").upper()
-        expects_nr = dcnr == "FALSE" or has_lte
-        return has_lte and not has_nr and expects_nr
+        return not has_nr
 
     def _extract_nr_focused(self, img_b64: str, image_path: str | Path) -> dict | None:
         """Send full image with NR-only focused prompt. Returns NR params dict or None."""
