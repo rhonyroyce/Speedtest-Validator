@@ -85,6 +85,7 @@ HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="s
 HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
 PASS_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
 FAIL_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+PARTIAL_FAIL_FILL = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")  # Amber — some pass, some fail
 EXTRACTION_FAILED_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
 THIN_BORDER = Border(
     left=Side(style="thin"),
@@ -251,13 +252,36 @@ class OutputXlsxGenerator:
 
         # --- Conditional formatting ---
 
-        # Comment column (M) — PASS/FAIL coloring
+        # DL Throughput (K) / UL Throughput (L) — individual pass/fail coloring
+        dl_pf = cell_result.get("dl_pass_fail")
+        ul_pf = cell_result.get("ul_pass_fail")
+        dl_col = self._active_columns.index("DL Throughput") + 1 if "DL Throughput" in self._active_columns else None
+        ul_col = self._active_columns.index("UL Throughput") + 1 if "UL Throughput" in self._active_columns else None
+
+        if dl_col and dl_pf == "PASS":
+            ws.cell(row=row_num, column=dl_col).fill = PASS_FILL
+        elif dl_col and dl_pf == "FAIL":
+            ws.cell(row=row_num, column=dl_col).fill = FAIL_FILL
+
+        if ul_col and ul_pf == "PASS":
+            ws.cell(row=row_num, column=ul_col).fill = PASS_FILL
+        elif ul_col and ul_pf == "FAIL":
+            ws.cell(row=row_num, column=ul_col).fill = FAIL_FILL
+
+        # Comment column — green/amber/red based on DL+UL results
         comment = str(cell_result.get("comment", "")).upper()
-        comment_cell = ws.cell(row=row_num, column=13)
+        comment_col = self._active_columns.index("Comment") + 1 if "Comment" in self._active_columns else 13
+        comment_cell = ws.cell(row=row_num, column=comment_col)
         if "PASS" in comment and "FAIL" not in comment:
             comment_cell.fill = PASS_FILL
         elif "FAIL" in comment:
-            comment_cell.fill = FAIL_FILL
+            # Partial fail (one passes, one fails) → amber; both fail → red
+            dl_ok = dl_pf == "PASS"
+            ul_ok = ul_pf == "PASS"
+            if dl_ok or ul_ok:
+                comment_cell.fill = PARTIAL_FAIL_FILL
+            else:
+                comment_cell.fill = FAIL_FILL
 
         # RSRP (F) — quality gradient
         rsrp = cell_result.get("rsrp")

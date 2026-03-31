@@ -443,6 +443,9 @@ class DASValidator:
                 "observations": result.get("observations", ""),
                 "recommendations": result.get("recommendations", ""),
                 "kpi_impact": result.get("kpi_impact", ""),
+                # Pass individual DL/UL pass_fail for cell-level coloring
+                "dl_pass_fail": (result.get("threshold_st") or {}).get("dl", {}).get("pass_fail"),
+                "ul_pass_fail": (result.get("threshold_st") or {}).get("ul", {}).get("pass_fail"),
             }
             output_results.append(row)
 
