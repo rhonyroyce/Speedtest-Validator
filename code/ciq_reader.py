@@ -199,12 +199,18 @@ class CIQReader:
         CIQ cell ID convention: last digit = carrier number
         (e.g. ASFY0803A41 = sector 4 carrier 1, ASFY0803A42 = sector 4 carrier 2)
         """
-        # Try carrier hint first — most precise (C1 vs C2 from folder/filename)
+        # Narrow by carrier first (C1 vs C2 from folder/filename)
         if carrier:
-            for c in candidates:
-                cell_id = c.get("gUtranCell", "")
-                if cell_id and cell_id[-1].isdigit() and int(cell_id[-1]) == carrier:
-                    return c
+            carrier_matches = [
+                c for c in candidates
+                if c.get("gUtranCell", "")[-1:].isdigit()
+                and int(c["gUtranCell"][-1]) == carrier
+            ]
+            if len(carrier_matches) == 1:
+                return carrier_matches[0]
+            if carrier_matches:
+                # Multiple cells with same carrier — narrow and continue to band/BW
+                candidates = carrier_matches
 
         # Try band hint: 'n41' → match radioType containing 'B41' or 'n41'
         if nr_band:

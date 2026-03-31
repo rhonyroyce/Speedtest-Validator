@@ -140,7 +140,7 @@ _MEASUREMENT_ACTIVATION_MAP: dict[str, dict[str, Any]] = {
     # RF observables — activate when outside DAS antenna-end thresholds
     "rsrp": {"node": "T2_RSRP", "fail_below": -75, "fail_above": -40},
     "sinr": {"node": "T2_SINR", "fail_below": 25},
-    "rsrq": {"node": "T2_RSRQ", "fail_below": -12, "fail_above": -3},
+    "rsrq": {"node": "T2_RSRQ", "fail_below": -12, "fail_above": 0},
     "tx_power": {"node": "T2_TX_POWER", "fail_above": 0},
     # Throughput pass/fail — activates MIMO rank (most common RF cause of throughput issues)
     "dl_pass": {"node": "T2_MIMO_RANK", "activate_on_false": True},

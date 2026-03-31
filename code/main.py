@@ -7,11 +7,11 @@ generates analysis via LLM (see config.yaml), and produces Output.xlsx + RF_Thro
 Usage:
     # Full site processing
         cd /home/k8s/Projects/Speedtest-Validator
-python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
+
 
 python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
 
-python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs
+python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_CIQ_EXPORT_20251127_173752.xlsx --output-dir ./outputs --mode full
 
     # Dry run (2 screenshots only)
     python -m code.main --site-folder ./SFY0803A \\

@@ -34,10 +34,18 @@ If causal chains are provided below, use them to identify the specific KPI impac
 
 {MITIGATION_PLAYBOOKS}
 
+## CRITICAL: Respect the Threshold Verdict
+
+- Check the "Pass/Fail Status" section for the AUTHORITATIVE result
+- If OVERALL VERDICT is **FAIL**, there IS a KPI impact — do NOT say "No negative KPI impact expected"
+- If UL throughput fails, flag CAP domain (UL capacity, spectral efficiency)
+- If DL throughput fails, flag CAP domain (DL throughput, user experience)
+- If RSRP/SINR/RSRQ fails, flag the relevant domain (ACC, RET, CAP)
+
 ## Anti-Hallucination
 
 - ONLY reference KPI impacts that logically follow from the observed RF parameters
-- If RF parameters are all excellent and throughput is at peak, state "No negative KPI impact expected"
+- If RF parameters are all excellent and throughput meets thresholds, state "No negative KPI impact expected"
 - Map specific RF issues to specific KPIs (e.g., high BLER → RET domain, low SINR → CAP domain)
 - Do NOT list every KPI domain — only those relevant to THIS cell's condition
 - When referencing causal chains, only cite chains provided in the context above

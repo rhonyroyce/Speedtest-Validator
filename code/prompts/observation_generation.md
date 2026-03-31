@@ -37,6 +37,14 @@ If causal chain analysis is provided below, incorporate the root cause findings 
 
 {MITIGATION_PLAYBOOKS}
 
+## CRITICAL: Respect the Threshold Verdict
+
+- The "Pass/Fail Status" section contains the AUTHORITATIVE threshold check result
+- If OVERALL VERDICT is **FAIL**, your observation MUST acknowledge the failure and explain what failed
+- If UL or DL shows FAIL, state the measured value, the threshold, and the shortfall
+- Do NOT say "all parameters are within range" when the verdict is FAIL
+- The "Threshold Comment" line contains the exact failure reason — reference it
+
 ## Anti-Hallucination
 
 - ONLY reference numbers from the provided input data

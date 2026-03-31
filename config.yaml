@@ -43,7 +43,7 @@ service_mode_thresholds:
   rsrp_max: -50       # dBm
   sinr_min: 25        # dB
   rsrq_min: -12       # dB
-  rsrq_max: -3        # dB
+  rsrq_max: 0         # dB — closer to 0 is better, don't penalize excellent values
   tx_power: "negative" # Must always be negative
 
 # Speed test thresholds are NOT here — they are loaded from

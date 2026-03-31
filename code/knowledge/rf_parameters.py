@@ -61,13 +61,13 @@ DAS_SERVICE_MODE_THRESHOLDS = {
     "radio_end": {
         "rsrp": {"min": -60, "max": -40, "unit": "dBm"},
         "sinr": {"min": 25, "unit": "dB"},
-        "rsrq": {"min": -12, "max": -3, "unit": "dB"},
+        "rsrq": {"min": -12, "max": 0, "unit": "dB"},
         "tx_power": {"condition": "always_negative"},
     },
     "antenna_end": {
         "rsrp": {"min": -75, "max": -50, "unit": "dBm"},
         "sinr": {"min": 25, "unit": "dB"},
-        "rsrq": {"min": -12, "max": -3, "unit": "dB"},
+        "rsrq": {"min": -12, "max": 0, "unit": "dB"},
         "tx_power": {"condition": "always_negative"},
     },
 }

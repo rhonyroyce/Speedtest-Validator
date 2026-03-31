@@ -249,8 +249,33 @@ class AnalysisEngine:
         tr = context.get("threshold_result")
         if tr:
             lines.append("\n### Pass/Fail Status")
-            lines.append(f"- DL Pass: {tr.get('dl_pass', 'N/A')}")
-            lines.append(f"- UL Pass: {tr.get('ul_pass', 'N/A')}")
+
+            # Overall verdict — CRITICAL for LLM to align observations with
+            comment = tr.get("comment", "")
+            if comment:
+                overall = "FAIL" if comment.startswith("FAIL") else "PASS"
+                lines.append(f"- **OVERALL VERDICT: {overall}**")
+                lines.append(f"- **Threshold Comment: {comment}**")
+
+            # Speed test DL/UL
+            st = tr.get("speed_test", {})
+            if isinstance(st, dict):
+                dl = st.get("dl", {})
+                ul = st.get("ul", {})
+                if isinstance(dl, dict):
+                    lines.append(
+                        f"- DL: {dl.get('pass_fail', '?')} "
+                        f"(measured={dl.get('value')} Mbps, "
+                        f"min={dl.get('threshold_min')}, max={dl.get('threshold_max')})"
+                    )
+                if isinstance(ul, dict):
+                    lines.append(
+                        f"- UL: {ul.get('pass_fail', '?')} "
+                        f"(measured={ul.get('value')} Mbps, "
+                        f"min={ul.get('threshold_min')}, max={ul.get('threshold_max')})"
+                    )
+
+            # Service mode params
             sm_results = tr.get("service_mode", {})
             if isinstance(sm_results, dict):
                 for param, result in sm_results.items():

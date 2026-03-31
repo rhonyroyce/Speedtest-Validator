@@ -28,6 +28,14 @@ If causal chains and mitigation playbooks are provided below, use them to inform
 
 {MITIGATION_PLAYBOOKS}
 
+## CRITICAL: Respect the Threshold Verdict
+
+- Check the "Pass/Fail Status" section — it is the AUTHORITATIVE result
+- If OVERALL VERDICT is **FAIL**, you MUST provide recommendations to address the failure
+- Do NOT say "No action needed" when the verdict is FAIL
+- The "Threshold Comment" line tells you exactly what failed — address it
+- If UL throughput is below the minimum threshold, recommend investigation of UL capacity
+
 ## Anti-Hallucination
 
 - ONLY recommend actions that address issues visible in the data

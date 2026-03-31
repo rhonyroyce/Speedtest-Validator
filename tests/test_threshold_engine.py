@@ -92,10 +92,10 @@ class TestServiceMode:
         result = engine.check_service_mode(-50, 28, -15, -10, "radio_end")
         assert result["rsrq"]["pass_fail"] == "FAIL"
 
-    def test_fail_rsrq_above_max(self, engine):
-        """FAIL when RSRQ=-1 (above -3 max)."""
+    def test_pass_rsrq_excellent(self, engine):
+        """PASS when RSRQ=-1 — closer to 0 is better, max is now 0."""
         result = engine.check_service_mode(-50, 28, -1, -10, "radio_end")
-        assert result["rsrq"]["pass_fail"] == "FAIL"
+        assert result["rsrq"]["pass_fail"] == "PASS"
 
     def test_antenna_end_wider_rsrp_range(self, engine):
         """Antenna end allows RSRP down to -75, radio end only to -60."""
