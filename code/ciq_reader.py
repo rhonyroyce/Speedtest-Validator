@@ -141,7 +141,8 @@ class CIQReader:
 
     def match_cell(self, earfcn: int | None = None, arfcn: int | None = None,
                    pci: int | None = None, nr_band: str | None = None,
-                   nr_bw_mhz: int | None = None) -> dict | None:
+                   nr_bw_mhz: int | None = None,
+                   carrier: int | None = None) -> dict | None:
         """Find a matching CIQ cell entry by EARFCN, ARFCN, or PCI.
 
         Search priority: EARFCN (LTE) → ARFCN (NR) → PCI (both).
@@ -178,23 +179,33 @@ class CIQReader:
                 if cell["PCI"] == pci:
                     return cell
 
-            # NR — disambiguate PCI collisions using band/BW hints
+            # NR — disambiguate PCI collisions using band/BW/carrier hints
             nr_candidates = [c for c in self._nr_cells if c["PCI"] == pci]
             if len(nr_candidates) == 1:
                 return nr_candidates[0]
             if len(nr_candidates) > 1:
-                return self._disambiguate_nr(nr_candidates, nr_band, nr_bw_mhz)
+                return self._disambiguate_nr(nr_candidates, nr_band, nr_bw_mhz, carrier)
 
         return None
 
     @staticmethod
     def _disambiguate_nr(candidates: list[dict], nr_band: str | None,
-                         nr_bw_mhz: int | None) -> dict:
+                         nr_bw_mhz: int | None, carrier: int | None = None) -> dict:
         """Pick the right NR cell when multiple share the same PCI.
 
-        Uses nr_band (e.g. 'n41') and nr_bw_mhz (e.g. 100) from VLM extraction
-        to match against CIQ radioType and channelBandwidth.
+        Uses nr_band (e.g. 'n41'), nr_bw_mhz (e.g. 100), and carrier (1 or 2)
+        from VLM extraction / folder name to disambiguate.
+
+        CIQ cell ID convention: last digit = carrier number
+        (e.g. ASFY0803A41 = sector 4 carrier 1, ASFY0803A42 = sector 4 carrier 2)
         """
+        # Try carrier hint first — most precise (C1 vs C2 from folder/filename)
+        if carrier:
+            for c in candidates:
+                cell_id = c.get("gUtranCell", "")
+                if cell_id and cell_id[-1].isdigit() and int(cell_id[-1]) == carrier:
+                    return c
+
         # Try band hint: 'n41' → match radioType containing 'B41' or 'n41'
         if nr_band:
             band_num = nr_band.lower().replace("n", "")

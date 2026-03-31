@@ -23,6 +23,7 @@ python -m code.main --site-folder ./input/SFY0803A --ciq ./input/SFY0803A_MMBB_C
 
 import argparse
 import logging
+import re
 import sys
 import time
 from pathlib import Path
@@ -76,6 +77,17 @@ class DASValidator:
         self.output_xlsx = OutputXlsxGenerator(self.config)
 
         logger.info("DASValidator initialized with config: %s", config_path)
+
+    @staticmethod
+    def _extract_carrier(tech_subfolder: str | None) -> int | None:
+        """Extract carrier number (1 or 2) from tech subfolder or filename tech.
+
+        Examples: 'N2500_C1_NSA' → 1, 'N2500_C2 SA' → 2, 'L1900' → None
+        """
+        if not tech_subfolder:
+            return None
+        m = re.search(r'_C(\d)', tech_subfolder)
+        return int(m.group(1)) if m else None
 
     @staticmethod
     def _pick_rf_value(conn_mode: str, lte_val, nr_val):
@@ -211,13 +223,15 @@ class DASValidator:
             arfcn = int(arfcn) if arfcn is not None else None
             pci = int(pci) if pci is not None else None
 
-            # Pass NR band/BW hints for PCI collision disambiguation
+            # Pass NR band/BW/carrier hints for PCI collision disambiguation
             nr_band_hint = nr.get("nr_band")  # e.g. "n41"
             nr_bw_hint = int(nr.get("nr_bandwidth_mhz") or 0) or None
+            carrier_hint = self._extract_carrier(result.get("tech_subfolder"))
             matched = self.ciq_reader.match_cell(
                 earfcn=earfcn, arfcn=arfcn, pci=pci,
                 nr_band=str(nr_band_hint) if nr_band_hint else None,
                 nr_bw_mhz=nr_bw_hint,
+                carrier=carrier_hint,
             )
             if matched:
                 result["ciq"] = matched
@@ -288,6 +302,7 @@ class DASValidator:
                         pci=int(nr_pci) if nr_pci else None,
                         nr_band=str(nr.get("nr_band")) if nr.get("nr_band") else None,
                         nr_bw_mhz=int(nr.get("nr_bandwidth_mhz") or 0) or None,
+                        carrier=self._extract_carrier(result.get("tech_subfolder")),
                     )
                     if nr_match:
                         bw_nr_c1 = int(self.ciq_reader.get_bandwidth_mhz(nr_match)) or bw_nr_c1
