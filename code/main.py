@@ -211,7 +211,14 @@ class DASValidator:
             arfcn = int(arfcn) if arfcn is not None else None
             pci = int(pci) if pci is not None else None
 
-            matched = self.ciq_reader.match_cell(earfcn=earfcn, arfcn=arfcn, pci=pci)
+            # Pass NR band/BW hints for PCI collision disambiguation
+            nr_band_hint = nr.get("nr_band")  # e.g. "n41"
+            nr_bw_hint = int(nr.get("nr_bandwidth_mhz") or 0) or None
+            matched = self.ciq_reader.match_cell(
+                earfcn=earfcn, arfcn=arfcn, pci=pci,
+                nr_band=str(nr_band_hint) if nr_band_hint else None,
+                nr_bw_mhz=nr_bw_hint,
+            )
             if matched:
                 result["ciq"] = matched
                 result["bandwidth_mhz"] = self.ciq_reader.get_bandwidth_mhz(matched)
@@ -279,6 +286,8 @@ class DASValidator:
                     nr_match = self.ciq_reader.match_cell(
                         arfcn=int(nr_arfcn) if nr_arfcn else None,
                         pci=int(nr_pci) if nr_pci else None,
+                        nr_band=str(nr.get("nr_band")) if nr.get("nr_band") else None,
+                        nr_bw_mhz=int(nr.get("nr_bandwidth_mhz") or 0) or None,
                     )
                     if nr_match:
                         bw_nr_c1 = int(self.ciq_reader.get_bandwidth_mhz(nr_match)) or bw_nr_c1

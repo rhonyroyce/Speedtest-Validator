@@ -103,11 +103,13 @@ class CIQReader:
         return self._nr_cells
 
     def match_cell(self, earfcn: int | None = None, arfcn: int | None = None,
-                   pci: int | None = None) -> dict | None:
+                   pci: int | None = None, nr_band: str | None = None,
+                   nr_bw_mhz: int | None = None) -> dict | None:
         """Find a matching CIQ cell entry by EARFCN, ARFCN, or PCI.
 
         Search priority: EARFCN (LTE) → ARFCN (NR) → PCI (both).
-        If multiple match, PCI is used as a tiebreaker when provided alongside freq.
+        When PCI has collisions (e.g. n25 and n41 share same PCI),
+        nr_band and nr_bw_mhz are used to disambiguate.
 
         Returns:
             Matching cell dict, or None
@@ -134,14 +136,45 @@ class CIQReader:
 
         # Fallback: search by PCI across both lists
         if pci is not None:
+            # LTE — no ambiguity needed
             for cell in self._lte_cells:
                 if cell["PCI"] == pci:
                     return cell
-            for cell in self._nr_cells:
-                if cell["PCI"] == pci:
-                    return cell
+
+            # NR — disambiguate PCI collisions using band/BW hints
+            nr_candidates = [c for c in self._nr_cells if c["PCI"] == pci]
+            if len(nr_candidates) == 1:
+                return nr_candidates[0]
+            if len(nr_candidates) > 1:
+                return self._disambiguate_nr(nr_candidates, nr_band, nr_bw_mhz)
 
         return None
+
+    @staticmethod
+    def _disambiguate_nr(candidates: list[dict], nr_band: str | None,
+                         nr_bw_mhz: int | None) -> dict:
+        """Pick the right NR cell when multiple share the same PCI.
+
+        Uses nr_band (e.g. 'n41') and nr_bw_mhz (e.g. 100) from VLM extraction
+        to match against CIQ radioType and channelBandwidth.
+        """
+        # Try band hint: 'n41' → match radioType containing 'B41' or 'n41'
+        if nr_band:
+            band_num = nr_band.lower().replace("n", "")
+            for c in candidates:
+                radio = str(c.get("radioType", "")).lower()
+                cell_name = str(c.get("gUtranCell", "")).lower()
+                if f"b{band_num}" in radio or f"n{band_num}" in radio or f"b{band_num}" in cell_name:
+                    return c
+
+        # Try BW hint: prefer cell whose BW matches VLM-extracted BW
+        if nr_bw_mhz:
+            for c in candidates:
+                if abs(c.get("channelBandwidth", 0) - nr_bw_mhz) < 5:
+                    return c
+
+        # Last resort: prefer largest BW cell (more likely the primary carrier)
+        return max(candidates, key=lambda c: c.get("channelBandwidth", 0))
 
     def get_mimo_config(self, cell: dict) -> str:
         """Determine SISO or MIMO from noOfTxAntennas.
