@@ -80,19 +80,56 @@ class CIQReader:
         self._check_pci_collisions()
 
     def _check_pci_collisions(self) -> None:
-        """Warn when multiple cells share the same PCI value."""
+        """Check for PCI reuse across sectors (true collisions).
+
+        Same PCI shared by different bands/carriers within a sector is NORMAL
+        for DAS — all technologies in a sector typically share one PCI.
+        Only flag when different SECTORS share the same PCI.
+        """
+        pci_to_sectors: dict[int, set[str]] = defaultdict(set)
         pci_to_cells: dict[int, list[str]] = defaultdict(list)
+
         for cell in self._lte_cells:
             pci = cell.get("PCI")
             if pci is not None and pci != 0:
-                pci_to_cells[pci].append(cell["cellId"])
+                cell_id = cell["cellId"]
+                pci_to_cells[pci].append(cell_id)
+                # Extract sector from cell ID (e.g. LSFY0803A11 → sector "1")
+                sector = self._extract_sector(cell_id)
+                if sector:
+                    pci_to_sectors[pci].add(sector)
+
         for cell in self._nr_cells:
             pci = cell.get("PCI")
             if pci is not None and pci != 0:
-                pci_to_cells[pci].append(cell["gUtranCell"])
-        for pci, cells in pci_to_cells.items():
-            if len(cells) > 1:
-                logger.warning("PCI collision: PCI=%d shared by cells %s", pci, cells)
+                cell_id = cell["gUtranCell"]
+                pci_to_cells[pci].append(cell_id)
+                sector = self._extract_sector(cell_id)
+                if sector:
+                    pci_to_sectors[pci].add(sector)
+
+        for pci, sectors in pci_to_sectors.items():
+            cells = pci_to_cells[pci]
+            if len(sectors) > 1:
+                logger.warning("PCI collision across sectors: PCI=%d shared by sectors %s (cells: %s)",
+                               pci, sorted(sectors), cells)
+            elif len(cells) > 1:
+                logger.debug("PCI=%d shared by %d cells in same sector (normal DAS): %s",
+                             pci, len(cells), cells)
+
+    @staticmethod
+    def _extract_sector(cell_id: str) -> str | None:
+        """Extract sector number from CIQ cell ID.
+
+        DAS cell IDs typically end with sector+carrier digits, e.g.:
+        LSFY0803A11 → sector '1' (second-to-last digit)
+        ASFY0803A42 → sector '4'
+        """
+        # Sector is encoded in the cell ID — typically the digit before the last
+        # e.g. xSFY0803A<sector><carrier> where sector=1-6, carrier=1-2
+        import re
+        m = re.search(r'[A-Z](\d)\d$', cell_id)
+        return m.group(1) if m else None
 
     def get_lte_cells(self) -> list[dict]:
         """Return list of parsed LTE cell dicts."""
