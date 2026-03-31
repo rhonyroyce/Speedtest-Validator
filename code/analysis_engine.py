@@ -280,10 +280,19 @@ class AnalysisEngine:
             if isinstance(sm_results, dict):
                 for param, result in sm_results.items():
                     if isinstance(result, dict):
+                        min_v = result.get('min')
+                        max_v = result.get('max')
+                        if min_v is not None and max_v is not None:
+                            range_str = f"{min_v} to {max_v}"
+                        elif min_v is not None:
+                            range_str = f"≥{min_v}"
+                        elif max_v is not None:
+                            range_str = f"≤{max_v}"
+                        else:
+                            range_str = "N/A"
                         lines.append(
                             f"- {param.upper()}: {result.get('pass_fail', '?')} "
-                            f"(measured={result.get('value')}, "
-                            f"range={result.get('min')}~{result.get('max')})"
+                            f"(measured={result.get('value')}, threshold={range_str})"
                         )
 
         # RF observations from knowledge engine
@@ -293,13 +302,7 @@ class AnalysisEngine:
             for o in obs:
                 lines.append(f"- {o}")
 
-        # Throughput context (theoretical peaks)
-        tp = context.get("throughput_context", {})
-        for direction in ("dl", "ul"):
-            peak_info = tp.get(direction)
-            if peak_info:
-                lines.append(f"- {direction.upper()} Theoretical Peak: {peak_info.get('peak', 'N/A')} Mbps")
-                lines.append(f"- {direction.upper()} Typical DAS: {peak_info.get('typical_das', 'N/A')} Mbps")
+        # Throughput context — only thresholds matter, not theoretical peaks
 
         # KPI impacts from knowledge engine
         kpi_text = context.get("kpi_impact_text")
