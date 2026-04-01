@@ -1,6 +1,6 @@
 ---
 version: "2.0"
-model: qwen2.5vl:7b
+# model and temperature are set at runtime from config.yaml — values here are for reference only
 temperature: 0.15
 output_format: json
 accuracy_target: 0.90

@@ -1,6 +1,6 @@
 ---
 version: "1.0"
-model: gpt-oss:20b
+# model and temperature are set at runtime from config.yaml — values here are for reference only
 temperature: 0.3
 output_format: text
 accuracy_target: 0.90

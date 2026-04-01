@@ -20,7 +20,7 @@ def mock_config():
     return {
         "ollama": {
             "base_url": "http://localhost:11434",
-            "vision_model": "minicpm-v:8b",
+            "vision_model": "qwen2.5vl:7b",
             "analysis_model": "gpt-oss:20b",
             "max_retries": 3,
             "extraction_temperature": 0.15,
@@ -53,7 +53,7 @@ class TestValidateModelsAvailable:
     def test_all_models_present(self, client):
         resp = {
             "models": [
-                {"name": "qwen3-vl:8b", "size": 6_000_000_000},
+                {"name": "qwen2.5vl:7b", "size": 6_000_000_000},
                 {"name": "gpt-oss:20b", "size": 13_000_000_000},
                 {"name": "llama3:8b", "size": 4_700_000_000},
             ]
@@ -69,12 +69,12 @@ class TestValidateModelsAvailable:
         }
         with patch.object(client, "_request", return_value=resp):
             missing = client.validate_models_available()
-            assert missing == ["qwen3-vl:8b"]
+            assert missing == ["qwen2.5vl:7b"]
 
     def test_analysis_model_missing(self, client):
         resp = {
             "models": [
-                {"name": "qwen3-vl:8b", "size": 6_000_000_000},
+                {"name": "qwen2.5vl:7b", "size": 6_000_000_000},
             ]
         }
         with patch.object(client, "_request", return_value=resp):
@@ -89,15 +89,15 @@ class TestValidateModelsAvailable:
         }
         with patch.object(client, "_request", return_value=resp):
             missing = client.validate_models_available()
-            assert missing == ["qwen3-vl:8b", "gpt-oss:20b"]
+            assert missing == ["qwen2.5vl:7b", "gpt-oss:20b"]
 
     def test_api_unreachable_returns_both(self, client):
         with patch.object(client, "_request", side_effect=ConnectionError("refused")):
             missing = client.validate_models_available()
-            assert missing == ["qwen3-vl:8b", "gpt-oss:20b"]
+            assert missing == ["qwen2.5vl:7b", "gpt-oss:20b"]
 
     def test_empty_models_list(self, client):
         resp = {"models": []}
         with patch.object(client, "_request", return_value=resp):
             missing = client.validate_models_available()
-            assert missing == ["qwen3-vl:8b", "gpt-oss:20b"]
+            assert missing == ["qwen2.5vl:7b", "gpt-oss:20b"]

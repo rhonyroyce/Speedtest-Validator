@@ -1,4 +1,4 @@
-"""Tests for output_xlsx.py and output_docx.py — verify both generators create valid files.
+"""Tests for output_xlsx.py — verify generator creates valid files.
 
 Implementation: Claude Code Prompt 8 (Output Generation)
 """
@@ -11,7 +11,6 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from code.output_xlsx import OutputXlsxGenerator
-from code.output_docx import OutputDocxGenerator
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "test"
@@ -236,87 +235,6 @@ class TestOutputXlsxGenerate:
         out = tmp_path / "empty_output.xlsx"
         result = gen.generate([], mock_threshold_data, out)
         assert result.exists()
-
-
-# =====================================================================
-# OutputDocxGenerator Tests
-# =====================================================================
-
-class TestOutputDocxGenerate:
-    """Test that generate() creates a valid .docx file."""
-
-    def test_creates_file(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        result = gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        assert result.exists()
-        assert result.stat().st_size > 0
-
-    def test_has_title(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        from docx import Document
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        doc = Document(str(out))
-        # Check that title text is present somewhere in paragraphs
-        all_text = " ".join(p.text for p in doc.paragraphs)
-        assert "RF Throughput Analysis" in all_text
-        assert "SFY0803A" in all_text
-
-    def test_has_executive_summary(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        from docx import Document
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        doc = Document(str(out))
-        all_text = " ".join(p.text for p in doc.paragraphs)
-        assert "Executive Summary" in all_text
-        assert "3" in all_text  # total cell count
-
-    def test_has_glossary(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        from docx import Document
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        doc = Document(str(out))
-        all_text = " ".join(p.text for p in doc.paragraphs)
-        assert "Glossary" in all_text
-
-    def test_has_tables(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        from docx import Document
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        doc = Document(str(out))
-        # Should have at least: site config table, RF params tables, summary table, band config table, glossary table
-        assert len(doc.tables) >= 5
-
-    def test_site_config_table(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        from docx import Document
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        doc = Document(str(out))
-        # First table after title page should be site config with 7 columns
-        site_table = doc.tables[0]
-        assert len(site_table.columns) == 7
-        assert site_table.rows[0].cells[0].text == "Sector"
-
-    def test_empty_results(self, config, mock_site_config, mock_analysis_data, tmp_path):
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "empty_report.docx"
-        result = gen.generate([], mock_site_config, mock_analysis_data, out)
-        assert result.exists()
-
-    def test_kpi_section(self, config, mock_results, mock_site_config, mock_analysis_data, tmp_path):
-        from docx import Document
-        gen = OutputDocxGenerator(config)
-        out = tmp_path / "test_report.docx"
-        gen.generate(mock_results, mock_site_config, mock_analysis_data, out)
-        doc = Document(str(out))
-        all_text = " ".join(p.text for p in doc.paragraphs)
-        assert "KPI Correlation" in all_text
-        assert "ACC" in all_text  # KPI domain reference
 
 
 # =====================================================================

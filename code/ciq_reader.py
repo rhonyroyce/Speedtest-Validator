@@ -5,6 +5,7 @@ Key fields: dlChannelBandwidth (kHz→MHz), noOfTxAntennas (SISO/MIMO), earfcnDl
 Implementation: Claude Code Prompt 4 (CIQ Reader)
 """
 import logging
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -96,7 +97,7 @@ class CIQReader:
                 pci_to_cells[pci].append(cell_id)
                 # Extract sector from cell ID (e.g. LSFY0803A11 → sector "1")
                 sector = self._extract_sector(cell_id)
-                if sector:
+                if sector != 0:
                     pci_to_sectors[pci].add(sector)
 
         for cell in self._nr_cells:
@@ -105,7 +106,7 @@ class CIQReader:
                 cell_id = cell["gUtranCell"]
                 pci_to_cells[pci].append(cell_id)
                 sector = self._extract_sector(cell_id)
-                if sector:
+                if sector != 0:
                     pci_to_sectors[pci].add(sector)
 
         for pci, sectors in pci_to_sectors.items():
@@ -118,18 +119,26 @@ class CIQReader:
                              pci, len(cells), cells)
 
     @staticmethod
-    def _extract_sector(cell_id: str) -> str | None:
+    def _extract_sector(cell_id: str) -> int:
         """Extract sector number from CIQ cell ID.
 
         DAS cell IDs typically end with sector+carrier digits, e.g.:
-        LSFY0803A11 → sector '1' (second-to-last digit)
-        ASFY0803A42 → sector '4'
+        LSFY0803A11 → sector 1 (second-to-last digit)
+        ASFY0803A42 → sector 4
+
+        Returns:
+            Sector number as int, or 0 if extraction fails.
         """
-        # Sector is encoded in the cell ID — typically the digit before the last
-        # e.g. xSFY0803A<sector><carrier> where sector=1-6, carrier=1-2
-        import re
         m = re.search(r'[A-Z](\d)\d$', cell_id)
-        return m.group(1) if m else None
+        if m:
+            return int(m.group(1))
+        # Fallback: direct index for non-standard naming
+        if len(cell_id) >= 2:
+            try:
+                return int(cell_id[-2])
+            except ValueError:
+                pass
+        return 0
 
     def get_lte_cells(self) -> list[dict]:
         """Return list of parsed LTE cell dicts."""
@@ -268,17 +277,3 @@ class CIQReader:
             summary[sector]["nr"].append(cell)
 
         return dict(summary)
-
-    @staticmethod
-    def _extract_sector(cell_name: str) -> int:
-        """Extract sector number from cell name.
-
-        Convention: sector digit is at position [-2] in the cell name.
-        E.g., LSFY0803A11 → sector 1, ASFY0803A31 → sector 3
-        """
-        if len(cell_name) >= 2:
-            try:
-                return int(cell_name[-2])
-            except ValueError:
-                pass
-        return 0

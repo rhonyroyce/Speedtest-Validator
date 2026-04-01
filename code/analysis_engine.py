@@ -1,12 +1,12 @@
-"""Analysis engine — correlates RF data with knowledge base, calls gpt-oss:20b.
+"""Analysis engine — correlates RF data with knowledge base, calls analysis model (see config.yaml).
 
 Orchestrates the analysis phase of the pipeline:
 1. Receives extracted RF data (from VLM) + CIQ config + threshold results
 2. Builds rich context from knowledge engine
-3. Sends structured prompts to gpt-oss:20b for Observations, Recommendations, KPI Impact
+3. Sends structured prompts to analysis model for Observations, Recommendations, KPI Impact
 4. Validates and sanitizes LLM output (retry on empty/invalid)
 
-CRITICAL: This runs during the ANALYSIS phase — qwen3-vl:8b must be unloaded first.
+CRITICAL: This runs during the ANALYSIS phase — vision model must be unloaded first.
 
 Implementation: Claude Code Prompt 7 (Analysis Engine)
 """
@@ -199,6 +199,19 @@ class AnalysisEngine:
         # Efficiency
         flat["dl_efficiency"] = context.get("dl_efficiency", "N/A")
         flat["ul_efficiency"] = context.get("ul_efficiency", "N/A")
+
+        # Causal analysis — inject into template placeholders {CAUSAL_CHAINS} / {MITIGATION_PLAYBOOKS}
+        flat["causal_chains"] = context.get("causal_chains", "")
+        playbooks = context.get("mitigation_playbooks", [])
+        if playbooks:
+            pb_lines = []
+            for pb in playbooks:
+                pb_lines.append(f"**{pb.get('title', 'Playbook')}** (Severity: {pb.get('severity', 'N/A')})")
+                for action in pb.get("field_actions", []):
+                    pb_lines.append(f"  - {action}")
+            flat["mitigation_playbooks"] = "\n".join(pb_lines)
+        else:
+            flat["mitigation_playbooks"] = ""
 
         return flat
 

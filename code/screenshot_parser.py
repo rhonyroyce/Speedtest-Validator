@@ -1,7 +1,7 @@
 """Screenshot discovery and VLM extraction.
 
 Discovers screenshot pairs (Service Mode + Speedtest) in site folders,
-calls qwen3-vl:8b for extraction, validates JSON schema, builds manifest.
+calls vision model (see config.yaml) for extraction, validates JSON schema, builds manifest.
 
 Implementation: Claude Code Prompt 3 (Screenshot Parser)
 """
@@ -139,6 +139,7 @@ class LTEParams(BaseModel):
 class NRParams(BaseModel):
     nr_band: int | str | None = None
     nr_bandwidth_mhz: float | None = None
+    bandwidth_c2_mhz: float | None = None
     nr_arfcn: int | None = None
     nr_pci: int | None = None
     nr5g_rsrp_dbm: float | None = None
@@ -168,8 +169,8 @@ class NRParams(BaseModel):
     def coerce_int_fields(cls, v: Any) -> int | None:
         return _safe_int(v)
 
-    @field_validator("nr_bandwidth_mhz", "nr5g_rsrp_dbm", "nr5g_rsrq_db", "nr5g_sinr_db",
-                     "nr_tx_power_dbm", "nr_bler_pct", "nr_dl_scheduling_pct",
+    @field_validator("nr_bandwidth_mhz", "bandwidth_c2_mhz", "nr5g_rsrp_dbm", "nr5g_rsrq_db",
+                     "nr5g_sinr_db", "nr_tx_power_dbm", "nr_bler_pct", "nr_dl_scheduling_pct",
                      "nr_ant_max_rsrp", "nr_ant_min_rsrp", "endc_total_tx_power_dbm",
                      "nr_rx0_rsrp", "nr_rx1_rsrp", "nr_rx2_rsrp", "nr_rx3_rsrp", mode="before")
     @classmethod

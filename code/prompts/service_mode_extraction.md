@@ -1,6 +1,6 @@
 ---
 version: "2.0"
-model: qwen2.5vl:7b
+# model and temperature are set at runtime from config.yaml — values here are for reference only
 temperature: 0.15
 output_format: json
 accuracy_target: 0.85
@@ -30,7 +30,8 @@ NR labels (appear in lower section, all prefixed "NR" or "NR5G"):
 - "NR_ARFCN:" → nr_arfcn (integer like 501390, 386230)
 - "NR_PCI:" → nr_pci (integer 0-1007)
 - "NR_BAND:" → nr_band (string like "n41", "n25", "n71")
-- "NR_BW:" → nr_bandwidth_mhz (integer: 20, 30, 40, 50, 100)
+- "NR_BW:" → nr_bandwidth_mhz (integer: 20, 30, 40, 50, 100) — this is the C1 (primary) NR carrier BW
+- If a SECOND NR carrier BW is visible (NR-DC mode), put it in bandwidth_c2_mhz
 - "NR_SB_Status:" → nr_sb_status (string: "LTE+NR", "NR only", or "--")
 - "NR_Tx Pwr:" → nr_tx_power_dbm
 - "NR_SCS:" → nr_scs_khz (integer: 15, 30, or 60. NOT "15kHz" or "30kHz")
@@ -72,7 +73,8 @@ Look at "Serving PLMN" line AND which params have actual numeric values:
     "mimo_configured": null, "upperlayer_ind_r15": null, "dcnr_restriction": null
   },
   "nr_params": {
-    "nr_band": null, "nr_bandwidth_mhz": null, "nr_arfcn": null, "nr_pci": null,
+    "nr_band": null, "nr_bandwidth_mhz": null, "bandwidth_c2_mhz": null,
+    "nr_arfcn": null, "nr_pci": null,
     "nr5g_rsrp_dbm": null, "nr5g_rsrq_db": null, "nr5g_sinr_db": null,
     "nr_tx_power_dbm": null, "nr_scs_khz": null, "nr_sb_status": null,
     "nr_dl_scheduling_pct": null, "nr_bler_pct": null,

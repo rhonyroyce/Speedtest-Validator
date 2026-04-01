@@ -23,7 +23,7 @@ class OllamaClient:
     def __init__(self, config: dict):
         ollama_cfg = config.get("ollama", {})
         self.base_url = ollama_cfg.get("base_url", "http://localhost:11434").rstrip("/")
-        self.vision_model = ollama_cfg.get("vision_model", "minicpm-v:8b")
+        self.vision_model = ollama_cfg.get("vision_model", "qwen2.5vl:7b")
         self.analysis_model = ollama_cfg.get("analysis_model", "gpt-oss:20b")
         self.max_retries = ollama_cfg.get("max_retries", 3)
         self.extraction_temperature = ollama_cfg.get("extraction_temperature", 0.15)
@@ -72,7 +72,8 @@ class OllamaClient:
         try:
             self._request("GET", "/api/ps", timeout=10)
             return True
-        except Exception:
+        except Exception as exc:
+            logger.warning("Ollama health check failed: %s", exc)
             return False
 
     def validate_models_available(self) -> list[str]:
@@ -83,7 +84,8 @@ class OllamaClient:
         """
         try:
             resp = self._request("GET", "/api/tags", timeout=10)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to query available models: %s", exc)
             return [self.vision_model, self.analysis_model]
 
         available = {m["name"] for m in resp.get("models", [])}
@@ -98,7 +100,8 @@ class OllamaClient:
         try:
             resp = self._request("GET", "/api/ps", timeout=10)
             return [m["name"] for m in resp.get("models", [])]
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to query loaded models: %s", exc)
             return []
 
     # ------------------------------------------------------------------

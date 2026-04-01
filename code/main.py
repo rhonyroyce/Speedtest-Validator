@@ -164,7 +164,7 @@ class DASValidator:
             pairs = pairs[:2]
             print(f"Dry run: processing only {len(pairs)} pairs")
 
-        # ── Phase 2: VLM Extraction (qwen3-vl:8b) ──────────────────
+        # ── Phase 2: VLM Extraction ─────────────────────────────────
         logger.info("Phase 2: VLM Extraction")
         vision_model = self.config["ollama"]["vision_model"]
         self.ollama.ensure_model_loaded(vision_model)
@@ -225,7 +225,7 @@ class DASValidator:
 
             # Pass NR band/BW/carrier hints for PCI collision disambiguation
             nr_band_hint = nr.get("nr_band")  # e.g. "n41"
-            nr_bw_hint = int(nr.get("nr_bandwidth_mhz") or 0) or None
+            nr_bw_hint = round(float(nr["nr_bandwidth_mhz"])) if nr.get("nr_bandwidth_mhz") else None
             carrier_hint = self._extract_carrier(result.get("tech_subfolder"))
             matched = self.ciq_reader.match_cell(
                 earfcn=earfcn, arfcn=arfcn, pci=pci,
@@ -275,12 +275,12 @@ class DASValidator:
             # Determine BW components — CIQ is source of truth, VLM is fallback
             ciq = result.get("ciq", {})
             is_nr_cell = "gUtranCell" in ciq or str(ciq.get("radioType", "")).upper().startswith("NR")
-            ciq_bw = int(result.get("bandwidth_mhz", 0))
+            ciq_bw = round(float(result.get("bandwidth_mhz", 0)))
 
             if is_nr_cell:
                 # CIQ matched as NR cell — use CIQ BW for NR
-                bw_nr_c1 = ciq_bw or int(nr.get("nr_bandwidth_mhz") or 0)
-                bw_nr_c2 = int(nr.get("bandwidth_c2_mhz") or 0)
+                bw_nr_c1 = ciq_bw or round(float(nr.get("nr_bandwidth_mhz") or 0))
+                bw_nr_c2 = round(float(nr.get("bandwidth_c2_mhz") or 0))
                 # Look up LTE BW separately from CIQ if EN-DC
                 bw_lte = 0
                 if conn_mode == "EN-DC":
@@ -288,12 +288,12 @@ class DASValidator:
                     if lte_earfcn:
                         lte_match = self.ciq_reader.match_cell(earfcn=int(lte_earfcn))
                         if lte_match:
-                            bw_lte = int(self.ciq_reader.get_bandwidth_mhz(lte_match))
+                            bw_lte = round(self.ciq_reader.get_bandwidth_mhz(lte_match))
             else:
                 # CIQ matched as LTE cell (or no match)
-                bw_lte = ciq_bw or int(lte.get("bandwidth_mhz") or 0)
+                bw_lte = ciq_bw or round(float(lte.get("bandwidth_mhz") or 0))
                 # NR BW: try CIQ lookup by ARFCN, fall back to VLM
-                bw_nr_c1 = int(nr.get("nr_bandwidth_mhz") or 0)
+                bw_nr_c1 = round(float(nr.get("nr_bandwidth_mhz") or 0))
                 nr_arfcn = nr.get("nr_arfcn")
                 nr_pci = nr.get("nr_pci")
                 if nr_arfcn or nr_pci:
@@ -301,12 +301,12 @@ class DASValidator:
                         arfcn=int(nr_arfcn) if nr_arfcn else None,
                         pci=int(nr_pci) if nr_pci else None,
                         nr_band=str(nr.get("nr_band")) if nr.get("nr_band") else None,
-                        nr_bw_mhz=int(nr.get("nr_bandwidth_mhz") or 0) or None,
+                        nr_bw_mhz=round(float(nr.get("nr_bandwidth_mhz") or 0)) or None,
                         carrier=self._extract_carrier(result.get("tech_subfolder")),
                     )
                     if nr_match:
-                        bw_nr_c1 = int(self.ciq_reader.get_bandwidth_mhz(nr_match)) or bw_nr_c1
-                bw_nr_c2 = int(nr.get("bandwidth_c2_mhz") or 0)
+                        bw_nr_c1 = round(self.ciq_reader.get_bandwidth_mhz(nr_match)) or bw_nr_c1
+                bw_nr_c2 = round(float(nr.get("bandwidth_c2_mhz") or 0))
 
             # Infer connection mode from BW data when VLM defaults to LTE Only
             original_mode = conn_mode

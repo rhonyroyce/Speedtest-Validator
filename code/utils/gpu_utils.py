@@ -6,6 +6,9 @@ when available. This module auto-detects RAPIDS and falls back gracefully.
 Usage:
     from .gpu_utils import read_csv, to_pandas, gpu_info, GPU_BACKEND
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Attempt RAPIDS import — graceful fallback to pandas/sklearn
 try:
@@ -44,8 +47,8 @@ def gpu_info() -> dict:
             import cupy
             info["gpu_memory_total"] = f"{cupy.cuda.Device().mem_info[1] / 1e9:.1f} GB"
             info["gpu_memory_free"] = f"{cupy.cuda.Device().mem_info[0] / 1e9:.1f} GB"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Could not query GPU memory via CuPy: %s", exc)
     return info
 
 
