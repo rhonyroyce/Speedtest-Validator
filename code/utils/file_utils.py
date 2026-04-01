@@ -215,6 +215,29 @@ def discover_screenshots(
                 "parsed": parsed,
             })
 
+    # Deduplicate: if same filename exists in a tech subfolder AND sector root,
+    # keep the subfolder version (has proper tech_subfolder from TECH_SUBFOLDER_PATTERNS)
+    seen: dict[tuple, int] = {}  # (sector, filename) → index in results
+    deduped = []
+    for r in results:
+        key = (r["sector"], r["filename"])
+        in_subfolder = r["path"].parent.name in TECH_SUBFOLDER_PATTERNS
+        if key in seen:
+            prev_idx = seen[key]
+            prev_in_subfolder = deduped[prev_idx]["path"].parent.name in TECH_SUBFOLDER_PATTERNS
+            if in_subfolder and not prev_in_subfolder:
+                # Replace root version with subfolder version
+                deduped[prev_idx] = r
+                logger.debug("Dedup: kept subfolder version of %s", r["filename"])
+            else:
+                logger.debug("Dedup: skipped duplicate %s", r["path"])
+        else:
+            seen[key] = len(deduped)
+            deduped.append(r)
+    if len(deduped) < len(results):
+        logger.info("Deduplicated %d screenshots (same file in root + subfolder)", len(results) - len(deduped))
+    results = deduped
+
     # Sort by sector, tech subfolder, then timestamp
     results.sort(key=lambda r: (
         r["sector"] or 0,
