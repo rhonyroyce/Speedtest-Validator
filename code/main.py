@@ -79,6 +79,23 @@ class DASValidator:
         logger.info("DASValidator initialized with config: %s", config_path)
 
     @staticmethod
+    def _format_duration(duration_sec) -> str:
+        """Format SM-ST duration as human-readable string with PASS/FAIL.
+
+        PASS if ≤ 240s (4 min), FAIL if > 240s.
+        """
+        if duration_sec is None or duration_sec == "":
+            return ""
+        try:
+            secs = int(duration_sec)
+        except (ValueError, TypeError):
+            return str(duration_sec)
+        minutes, seconds = divmod(secs, 60)
+        if minutes > 0:
+            return f"{minutes}m {seconds}s"
+        return f"{seconds}s"
+
+    @staticmethod
     def _extract_carrier(tech_subfolder: str | None) -> int | None:
         """Extract carrier number (1 or 2) from tech subfolder or filename tech.
 
@@ -436,16 +453,19 @@ class DASValidator:
                 "rsrq": self._pick_rf_value(conn_mode_str, lte.get("rsrq_db"), nr.get("nr5g_rsrq_db")),
                 "sinr": self._pick_rf_value(conn_mode_str, lte.get("sinr_db"), nr.get("nr5g_sinr_db")),
                 "tx_power": self._pick_rf_value(conn_mode_str, lte.get("tx_power_dbm"), nr.get("nr_tx_power_dbm")),
-                "sm_st_duration": result.get("duration_sec", ""),
+                "sm_st_duration": self._format_duration(result.get("duration_sec")),
                 "dl_throughput": st.get("dl_throughput_mbps") or "",
                 "ul_throughput": st.get("ul_throughput_mbps") or "",
                 "comment": result.get("comment", ""),
                 "observations": result.get("observations", ""),
                 "recommendations": result.get("recommendations", ""),
                 "kpi_impact": result.get("kpi_impact", ""),
-                # Pass individual DL/UL pass_fail for cell-level coloring
+                # Pass individual pass_fail for cell-level coloring
                 "dl_pass_fail": (result.get("threshold_st") or {}).get("dl", {}).get("pass_fail"),
                 "ul_pass_fail": (result.get("threshold_st") or {}).get("ul", {}).get("pass_fail"),
+                "duration_pass_fail": "PASS" if isinstance(result.get("duration_sec"), (int, float)) and result["duration_sec"] <= 240 else (
+                    "FAIL" if isinstance(result.get("duration_sec"), (int, float)) and result["duration_sec"] > 240 else None
+                ),
             }
             output_results.append(row)
 

@@ -283,6 +283,14 @@ class OutputXlsxGenerator:
             else:
                 comment_cell.fill = FAIL_FILL
 
+        # SM-ST Duration (J) — pass/fail (≤4 min = PASS, >4 min = FAIL)
+        dur_pf = cell_result.get("duration_pass_fail")
+        dur_col = self._active_columns.index("SM-ST Duration") + 1 if "SM-ST Duration" in self._active_columns else None
+        if dur_col and dur_pf == "PASS":
+            ws.cell(row=row_num, column=dur_col).fill = PASS_FILL
+        elif dur_col and dur_pf == "FAIL":
+            ws.cell(row=row_num, column=dur_col).fill = FAIL_FILL
+
         # RSRP (F) — quality gradient
         rsrp = cell_result.get("rsrp")
         if isinstance(rsrp, (int, float)):
