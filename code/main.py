@@ -428,7 +428,7 @@ class DASValidator:
             conn_mode_str = result.get("inferred_conn_mode", _CONN_MODE_MAP.get(sm.get("connection_mode", "LTE_ONLY"), "LTE Only"))
             row = {
                 "bts": site_id,
-                "tech_sector": f"SECTOR {result.get('sector', '?')} / {result.get('tech_subfolder') or (result.get('tech_info') or {}).get('band', 'Unknown')}",
+                "tech_sector": f"SECTOR {result.get('sector_name') or result.get('sector', '?')} / {result.get('tech_subfolder') or (result.get('tech_info') or {}).get('band', 'Unknown')}",
                 "connection_mode": conn_mode_str,
                 "bandwidth": bandwidth,
                 "pci": self._pick_rf_value(conn_mode_str, lte.get("pci"), nr.get("nr_pci")),

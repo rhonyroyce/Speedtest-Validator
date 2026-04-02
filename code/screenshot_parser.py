@@ -571,6 +571,7 @@ class ScreenshotParser:
             result = {
                 "cell_id": pair["cell_id"],
                 "sector": pair["sector"],
+                "sector_name": pair.get("sector_name"),
                 "tech_subfolder": pair["tech_subfolder"],
                 "tech_info": pair["tech_info"],
                 "duration_sec": pair["duration_sec"],
